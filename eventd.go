@@ -1,6 +1,9 @@
 package eventd
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 const (
 	// DefaultGetEventsLimit ...
@@ -19,10 +22,10 @@ type Event struct {
 
 // Repository ...
 type Repository interface {
-	GetLastEvents(limit uint64) ([]Event, error)
-	GetUnprocessedEvents(limit uint64) ([]Event, error)
+	GetLastEvents(ctx context.Context, limit uint64) ([]Event, error)
+	GetUnprocessedEvents(ctx context.Context, limit uint64) ([]Event, error)
 
-	UpdateSequences(events []Event) error
+	UpdateSequences(ctx context.Context, events []Event) error
 }
 
 // Runner ...

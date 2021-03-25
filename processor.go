@@ -1,5 +1,15 @@
 package eventd
 
+import "context"
+
+type processorCheckStatus uint32
+
+const (
+	processorCheckStatusOK       processorCheckStatus = 0
+	processorCheckStatusNeedWait processorCheckStatus = 1
+	processorCheckStatusTooSmall processorCheckStatus = 2
+)
+
 type processor struct {
 	repo                Repository
 	getLastEventsLimit  uint64
@@ -18,8 +28,8 @@ func newProcessor(repo Repository, opts runnerOpts) *processor {
 	}
 }
 
-func (p *processor) init() error {
-	events, err := p.repo.GetLastEvents(p.getLastEventsLimit)
+func (p *processor) init(ctx context.Context) error {
+	events, err := p.repo.GetLastEvents(ctx, p.getLastEventsLimit)
 	if err != nil {
 		return err
 	}
@@ -53,8 +63,8 @@ func (p *processor) storeEvents(events []Event) {
 	}
 }
 
-func (p *processor) signal() error {
-	events, err := p.repo.GetUnprocessedEvents(p.getLastEventsLimit)
+func (p *processor) signal(ctx context.Context) error {
+	events, err := p.repo.GetUnprocessedEvents(ctx, p.getLastEventsLimit)
 	if err != nil {
 		return err
 	}
@@ -68,7 +78,7 @@ func (p *processor) signal() error {
 		events[i].Sequence = lastSequence
 	}
 
-	err = p.repo.UpdateSequences(events)
+	err = p.repo.UpdateSequences(ctx, events)
 	if err != nil {
 		return err
 	}
@@ -76,4 +86,44 @@ func (p *processor) signal() error {
 	p.storeEvents(events)
 
 	return nil
+}
+
+func (p *processor) checkFromSequence(seq uint64) processorCheckStatus {
+	if seq > p.lastSequence {
+		return processorCheckStatusNeedWait
+	}
+	if seq <= p.beforeFirstSequence {
+		return processorCheckStatusTooSmall
+	}
+	return processorCheckStatusOK
+}
+
+func (p *processor) getEventsFrom(from uint64, result []Event) []Event {
+	size := uint64(len(p.storedEvents))
+	for seq := from; seq <= p.lastSequence; seq++ {
+		result = append(result, p.storedEvents[seq%size])
+	}
+	return result
+}
+
+func (p *processor) getLastSequence() uint64 {
+	return p.lastSequence
+}
+
+func (p *processor) run(ctx context.Context, signals <-chan struct{}) error {
+	select {
+	case <-signals:
+	DrainLoop:
+		for {
+			select {
+			case <-signals:
+				continue
+			default:
+				break DrainLoop
+			}
+		}
+		return p.signal(ctx)
+	case <-ctx.Done():
+		return nil
+	}
 }
