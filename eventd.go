@@ -3,8 +3,8 @@ package eventd
 import "time"
 
 const (
-	// DefaultGetLastEventsLimit ...
-	DefaultGetLastEventsLimit uint64 = 1000
+	// DefaultGetEventsLimit ...
+	DefaultGetEventsLimit uint64 = 1000
 )
 
 // Event ...
@@ -20,6 +20,9 @@ type Event struct {
 // Repository ...
 type Repository interface {
 	GetLastEvents(limit uint64) ([]Event, error)
+	GetUnprocessedEvents(limit uint64) ([]Event, error)
+
+	UpdateSequences(events []Event) error
 }
 
 // Runner ...
