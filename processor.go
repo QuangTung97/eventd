@@ -10,12 +10,25 @@ const (
 	processorCheckStatusTooSmall processorCheckStatus = 2
 )
 
+type fetchResponse struct {
+	existed bool
+	result  []Event
+}
+
+type fetchRequest struct {
+	from         uint64
+	limit        uint64
+	result       []Event
+	responseChan chan<- fetchResponse
+}
+
 type processor struct {
 	repo                Repository
 	getLastEventsLimit  uint64
 	storedEvents        []Event
 	lastSequence        uint64
 	beforeFirstSequence uint64
+	waitList            []fetchRequest
 }
 
 func newProcessor(repo Repository, opts runnerOpts) *processor {
@@ -98,9 +111,13 @@ func (p *processor) checkFromSequence(seq uint64) processorCheckStatus {
 	return processorCheckStatusOK
 }
 
-func (p *processor) getEventsFrom(from uint64, result []Event) []Event {
+func (p *processor) getEventsFrom(from uint64, result []Event, limit uint64) []Event {
 	size := uint64(len(p.storedEvents))
-	for seq := from; seq <= p.lastSequence; seq++ {
+	last := from + limit - 1
+	if last > p.lastSequence {
+		last = p.lastSequence
+	}
+	for seq := from; seq <= last; seq++ {
 		result = append(result, p.storedEvents[seq%size])
 	}
 	return result
@@ -110,19 +127,60 @@ func (p *processor) getLastSequence() uint64 {
 	return p.lastSequence
 }
 
-func (p *processor) run(ctx context.Context, signals <-chan struct{}) error {
+func (p *processor) handleSignals(ctx context.Context, signals <-chan struct{}) error {
+DrainLoop:
+	for {
+		select {
+		case <-signals:
+			continue
+		default:
+			break DrainLoop
+		}
+	}
+
+	lastSeq := p.lastSequence
+	err := p.signal(ctx)
+	if p.lastSequence > lastSeq {
+		for i, waitRequest := range p.waitList {
+			waitRequest.responseChan <- fetchResponse{
+				existed: true,
+				result:  p.getEventsFrom(lastSeq+1, waitRequest.result, waitRequest.limit),
+			}
+			p.waitList[i].result = nil
+			p.waitList[i].responseChan = nil
+		}
+		p.waitList = p.waitList[:0]
+	}
+	return err
+}
+
+func (p *processor) run(
+	ctx context.Context, signals <-chan struct{},
+	fetchChan <-chan fetchRequest,
+) error {
 	select {
 	case <-signals:
-	DrainLoop:
-		for {
-			select {
-			case <-signals:
-				continue
-			default:
-				break DrainLoop
+		return p.handleSignals(ctx, signals)
+
+	case request := <-fetchChan:
+		switch p.checkFromSequence(request.from) {
+		case processorCheckStatusOK:
+			request.responseChan <- fetchResponse{
+				existed: true,
+				result:  p.getEventsFrom(request.from, request.result, request.limit),
 			}
+
+		case processorCheckStatusTooSmall:
+			request.responseChan <- fetchResponse{
+				existed: false,
+				result:  request.result,
+			}
+
+		case processorCheckStatusNeedWait:
+			p.waitList = append(p.waitList, request)
 		}
-		return p.signal(ctx)
+		return nil
+
 	case <-ctx.Done():
 		return nil
 	}
