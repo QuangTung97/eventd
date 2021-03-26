@@ -3,6 +3,7 @@ package eventd
 type runnerOpts struct {
 	getEventsLimit  uint64
 	storedEventSize uint64
+	waitListLimit   uint64
 }
 
 // Option ...
@@ -13,4 +14,10 @@ func defaultRunnerOpts() runnerOpts {
 		getEventsLimit:  DefaultGetEventsLimit,
 		storedEventSize: DefaultGetEventsLimit,
 	}
+}
+
+type publisherOpts struct {
+	processedListLimit uint64
+	waitListLimit      uint64
+	publishLimit       uint64
 }
