@@ -2,7 +2,7 @@ package eventd
 
 import (
 	"context"
-	"fmt"
+	"go.uber.org/zap"
 	"sync"
 	"time"
 )
@@ -43,6 +43,15 @@ type Publisher interface {
 	Publish(ctx context.Context, events []Event) error
 }
 
+func sleepContext(ctx context.Context, duration time.Duration) {
+	select {
+	case <-time.After(duration):
+		return
+	case <-ctx.Done():
+		return
+	}
+}
+
 // Run ...
 //gocyclo:ignore
 func Run(ctx context.Context, repo Repository, signals <-chan struct{}, opts ...Option) {
@@ -52,6 +61,7 @@ OuterLoop:
 		for _, o := range opts {
 			o(&options)
 		}
+		logger := options.logger
 
 		p := newProcessor(repo, options)
 		err := p.init(ctx)
@@ -59,12 +69,11 @@ OuterLoop:
 			return
 		}
 		if err != nil {
-			fmt.Println(err)
-			// TODO: sleep context
+			logger.Error("eventd.processor.init", zap.Error(err))
+			sleepContext(ctx, options.errorSleepDuration)
 			continue OuterLoop
 		}
 
-		// TODO not default get events limit
 		fetchRequestChan := make(chan fetchRequest, DefaultGetEventsLimit)
 		publishers := map[PublisherID]*publisherRunner{}
 
@@ -78,8 +87,8 @@ OuterLoop:
 				return
 			}
 			if err != nil {
-				fmt.Println(err)
-				// TODO: sleep context
+				logger.Error("eventd.publisher.init", zap.Error(err))
+				sleepContext(ctx, options.errorSleepDuration)
 				continue OuterLoop
 			}
 			publishers[id] = publisher
@@ -98,7 +107,7 @@ OuterLoop:
 					return
 				}
 				if err != nil {
-					fmt.Println(err)
+					logger.Error("eventd.processor.run", zap.Error(err))
 					cancel()
 					return
 				}
@@ -122,9 +131,8 @@ OuterLoop:
 						return
 					}
 					if err != nil {
-						fmt.Println(err)
-						// TODO sleep with context
-						time.Sleep(10 * time.Second)
+						logger.Error("eventd.publisher.run", zap.Error(err))
+						sleepContext(runningCtx, options.errorSleepDuration)
 						return
 					}
 				}

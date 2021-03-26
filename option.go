@@ -1,5 +1,12 @@
 package eventd
 
+import (
+	"go.uber.org/zap"
+	"time"
+)
+
+// PUBLISHER OPTIONS
+
 type publisherOpts struct {
 	processedListLimit uint64
 	waitListLimit      uint64
@@ -15,28 +22,38 @@ type registeredPublisher struct {
 // PublisherOption ...
 type PublisherOption func(opts *publisherOpts)
 
-type runnerOpts struct {
-	getEventsLimit  uint64
-	storedEventSize uint64
-	publishers      map[PublisherID]registeredPublisher
-}
-
-// Option ...
-type Option func(opts *runnerOpts)
-
 var defaultPublisherOptions = publisherOpts{
 	processedListLimit: DefaultGetEventsLimit,
 	waitListLimit:      DefaultGetEventsLimit,
 	publishLimit:       DefaultGetEventsLimit,
 }
 
+// RUNNER OPTIONS
+
+type runnerOpts struct {
+	getEventsLimit     uint64
+	storedEventSize    uint64
+	errorSleepDuration time.Duration
+	publishers         map[PublisherID]registeredPublisher
+	logger             *zap.Logger
+}
+
+// Option ...
+type Option func(opts *runnerOpts)
+
 var defaultRunnerOpts = runnerOpts{
-	getEventsLimit:  DefaultGetEventsLimit,
-	storedEventSize: DefaultGetEventsLimit,
+	getEventsLimit:     DefaultGetEventsLimit,
+	storedEventSize:    DefaultGetEventsLimit,
+	errorSleepDuration: 30 * time.Second,
+	publishers:         map[PublisherID]registeredPublisher{},
+	logger:             zap.NewNop(),
 }
 
 // WithPublisher ...
-func WithPublisher(id PublisherID, publisher Publisher, options ...PublisherOption) Option {
+func WithPublisher(
+	id PublisherID, publisher Publisher,
+	waitRequestChan <-chan waitRequest, options ...PublisherOption,
+) Option {
 	return func(opts *runnerOpts) {
 		publisherOptions := defaultPublisherOptions
 		for _, o := range options {
@@ -44,7 +61,16 @@ func WithPublisher(id PublisherID, publisher Publisher, options ...PublisherOpti
 		}
 
 		opts.publishers[id] = registeredPublisher{
-			options: publisherOptions,
+			publisher:       publisher,
+			options:         publisherOptions,
+			waitRequestChan: waitRequestChan,
 		}
+	}
+}
+
+// WithLogger ...
+func WithLogger(logger *zap.Logger) Option {
+	return func(opts *runnerOpts) {
+		opts.logger = logger
 	}
 }
