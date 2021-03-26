@@ -378,6 +378,7 @@ func TestPublisherRunner_Run__Response_To_Wait__After_Recv_Resp_From_Processor(t
 	assert.Equal(t, uint64(21), resp)
 
 	assert.Equal(t, uint64(21), r.lastSequence)
+	assert.False(t, r.isFetching())
 }
 
 func TestPublisherRunner_Run__Response_To_Wait__Right_After_Wait_Request(t *testing.T) {
@@ -433,4 +434,7 @@ func TestPublisherRunner_Run__Response_To_Wait__Right_After_Wait_Request(t *test
 	assert.Equal(t, 1, len(waitRespChan))
 	resp := <-waitRespChan
 	assert.Equal(t, uint64(21), resp)
+
+	assert.Equal(t, uint64(21), r.lastSequence)
+	assert.False(t, r.isFetching())
 }

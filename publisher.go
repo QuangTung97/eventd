@@ -151,6 +151,8 @@ func (r *publisherRunner) fetch() {
 func (r *publisherRunner) run(ctx context.Context, waitRequestChan <-chan waitRequest) error {
 	select {
 	case resp := <-r.respChan:
+		r.fetching = false
+
 		err := r.publisher.Publish(ctx, resp.result)
 		if err != nil {
 			return err
