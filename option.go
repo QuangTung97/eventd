@@ -28,6 +28,35 @@ var defaultPublisherOptions = publisherOpts{
 	publishLimit:       DefaultGetEventsLimit,
 }
 
+func computePublisherOpts(options ...PublisherOption) publisherOpts {
+	result := defaultPublisherOptions
+	for _, o := range options {
+		o(&result)
+	}
+	return result
+}
+
+// WithProcessedListLimit ...
+func WithProcessedListLimit(limit uint64) PublisherOption {
+	return func(opts *publisherOpts) {
+		opts.processedListLimit = limit
+	}
+}
+
+// WithWaitListLimit ...
+func WithWaitListLimit(limit uint64) PublisherOption {
+	return func(opts *publisherOpts) {
+		opts.waitListLimit = limit
+	}
+}
+
+// WithPublishLimit ...
+func WithPublishLimit(limit uint64) PublisherOption {
+	return func(opts *publisherOpts) {
+		opts.publishLimit = limit
+	}
+}
+
 // RUNNER OPTIONS
 
 type runnerOpts struct {
@@ -49,20 +78,23 @@ var defaultRunnerOpts = runnerOpts{
 	logger:             zap.NewNop(),
 }
 
+func computeRunnerOpts(options ...Option) runnerOpts {
+	result := defaultRunnerOpts
+	for _, o := range options {
+		o(&result)
+	}
+	return result
+}
+
 // WithPublisher ...
 func WithPublisher(
 	id PublisherID, publisher Publisher,
 	waitRequestChan <-chan waitRequest, options ...PublisherOption,
 ) Option {
 	return func(opts *runnerOpts) {
-		publisherOptions := defaultPublisherOptions
-		for _, o := range options {
-			o(&publisherOptions)
-		}
-
 		opts.publishers[id] = registeredPublisher{
 			publisher:       publisher,
-			options:         publisherOptions,
+			options:         computePublisherOpts(options...),
 			waitRequestChan: waitRequestChan,
 		}
 	}
@@ -72,5 +104,26 @@ func WithPublisher(
 func WithLogger(logger *zap.Logger) Option {
 	return func(opts *runnerOpts) {
 		opts.logger = logger
+	}
+}
+
+// WithGetEventsLimit ...
+func WithGetEventsLimit(limit uint64) Option {
+	return func(opts *runnerOpts) {
+		opts.getEventsLimit = limit
+	}
+}
+
+// WithStoredEventsSize ...
+func WithStoredEventsSize(size uint64) Option {
+	return func(opts *runnerOpts) {
+		opts.storedEventSize = size
+	}
+}
+
+// WithErrorSleepDuration ...
+func WithErrorSleepDuration(d time.Duration) Option {
+	return func(opts *runnerOpts) {
+		opts.errorSleepDuration = d
 	}
 }

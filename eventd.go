@@ -57,10 +57,7 @@ func sleepContext(ctx context.Context, duration time.Duration) {
 func Run(ctx context.Context, repo Repository, signals <-chan struct{}, opts ...Option) {
 OuterLoop:
 	for {
-		options := defaultRunnerOpts
-		for _, o := range opts {
-			o(&options)
-		}
+		options := computeRunnerOpts(opts...)
 		logger := options.logger
 
 		p := newProcessor(repo, options)
