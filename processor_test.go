@@ -18,7 +18,7 @@ func TestProcessor_Init__GetLastEvents_Error(t *testing.T) {
 	repo.EXPECT().GetLastEvents(ctx, DefaultGetEventsLimit).
 		Return(nil, errors.New("get-last-events-error"))
 
-	p := newProcessor(repo, defaultRunnerOpts())
+	p := newProcessor(repo, defaultRunnerOpts)
 	err := p.init(ctx)
 	assert.Equal(t, errors.New("get-last-events-error"), err)
 }
@@ -32,7 +32,7 @@ func TestProcessor_Init__Without_Last_Events(t *testing.T) {
 
 	repo.EXPECT().GetLastEvents(ctx, DefaultGetEventsLimit).Return(nil, nil)
 
-	p := newProcessor(repo, defaultRunnerOpts())
+	p := newProcessor(repo, defaultRunnerOpts)
 	err := p.init(ctx)
 
 	assert.Equal(t, nil, err)
@@ -54,7 +54,7 @@ func TestProcessor_Init__With_Last_Events(t *testing.T) {
 	repo.EXPECT().GetLastEvents(ctx, DefaultGetEventsLimit).
 		Return(events, nil)
 
-	p := newProcessor(repo, defaultRunnerOpts())
+	p := newProcessor(repo, defaultRunnerOpts)
 	err := p.init(ctx)
 
 	assert.Equal(t, nil, err)

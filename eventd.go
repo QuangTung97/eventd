@@ -2,6 +2,8 @@ package eventd
 
 import (
 	"context"
+	"fmt"
+	"sync"
 	"time"
 )
 
@@ -41,11 +43,99 @@ type Publisher interface {
 	Publish(ctx context.Context, events []Event) error
 }
 
-// Runner ...
-type Runner struct {
-}
+// Run ...
+//gocyclo:ignore
+func Run(ctx context.Context, repo Repository, signals <-chan struct{}, opts ...Option) {
+OuterLoop:
+	for {
+		options := defaultRunnerOpts
+		for _, o := range opts {
+			o(&options)
+		}
 
-// New ...
-func New() *Runner {
-	return &Runner{}
+		p := newProcessor(repo, options)
+		err := p.init(ctx)
+		if ctx.Err() != nil {
+			return
+		}
+		if err != nil {
+			fmt.Println(err)
+			// TODO: sleep context
+			continue OuterLoop
+		}
+
+		// TODO not default get events limit
+		fetchRequestChan := make(chan fetchRequest, DefaultGetEventsLimit)
+		publishers := map[PublisherID]*publisherRunner{}
+
+		for id, publisherConf := range options.publishers {
+			conf := publisherConf
+
+			publisher := newPublisherRunner(id, repo,
+				conf.publisher, fetchRequestChan, conf.options)
+			err := publisher.init(ctx)
+			if ctx.Err() != nil {
+				return
+			}
+			if err != nil {
+				fmt.Println(err)
+				// TODO: sleep context
+				continue OuterLoop
+			}
+			publishers[id] = publisher
+		}
+
+		runningCtx, cancel := context.WithCancel(ctx)
+		var wg sync.WaitGroup
+
+		wg.Add(1 + len(publishers))
+		go func() {
+			defer wg.Done()
+
+			for {
+				err := p.run(runningCtx, signals, fetchRequestChan)
+				if runningCtx.Err() != nil {
+					return
+				}
+				if err != nil {
+					fmt.Println(err)
+					cancel()
+					return
+				}
+			}
+		}()
+
+		for id, publisherConf := range options.publishers {
+			publisher := publishers[id]
+			waitRequestChan := publisherConf.waitRequestChan
+
+			go func() {
+				defer wg.Done()
+
+				for {
+					if !publisher.isFetching() {
+						publisher.fetch()
+					}
+
+					err := publisher.run(runningCtx, waitRequestChan)
+					if runningCtx.Err() != nil {
+						return
+					}
+					if err != nil {
+						fmt.Println(err)
+						// TODO sleep with context
+						time.Sleep(10 * time.Second)
+						return
+					}
+				}
+			}()
+		}
+
+		<-runningCtx.Done()
+		wg.Wait()
+
+		if ctx.Err() != nil {
+			return
+		}
+	}
 }

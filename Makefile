@@ -14,4 +14,4 @@ install-tools:
 	go get github.com/golang/mock/mockgen
 	go install golang.org/x/lint/golint
 	go install github.com/kisielk/errcheck
-	go install github.com/fzipp/gocyclo
+	go get github.com/fzipp/gocyclo/cmd/gocyclo
