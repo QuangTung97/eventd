@@ -1,6 +1,9 @@
 package eventd
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 type processorCheckStatus uint32
 
@@ -25,6 +28,7 @@ type fetchRequest struct {
 type processor struct {
 	repo                Repository
 	getLastEventsLimit  uint64
+	retryDuration       time.Duration
 	storedEvents        []Event
 	lastSequence        uint64
 	beforeFirstSequence uint64
@@ -35,6 +39,7 @@ func newProcessor(repo Repository, opts runnerOpts) *processor {
 	return &processor{
 		repo:                repo,
 		getLastEventsLimit:  opts.getEventsLimit,
+		retryDuration:       opts.retryDuration,
 		storedEvents:        make([]Event, opts.storedEventSize),
 		lastSequence:        0,
 		beforeFirstSequence: 0,
@@ -160,6 +165,9 @@ func (p *processor) run(
 ) error {
 	select {
 	case <-signals:
+		return p.handleSignals(ctx, signals)
+
+	case <-time.After(p.retryDuration):
 		return p.handleSignals(ctx, signals)
 
 	case request := <-fetchChan:

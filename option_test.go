@@ -32,6 +32,7 @@ func TestRunnerOptions(t *testing.T) {
 	options := defaultRunnerOpts
 	expected := runnerOpts{
 		getEventsLimit:     DefaultGetEventsLimit,
+		retryDuration:      60 * time.Second,
 		storedEventSize:    DefaultGetEventsLimit,
 		errorSleepDuration: 30 * time.Second,
 		publishers:         map[PublisherID]registeredPublisher{},
@@ -69,6 +70,7 @@ func TestComputeRunnerOptions(t *testing.T) {
 	options := computeRunnerOpts(
 		WithLogger(logger),
 		WithGetEventsLimit(55),
+		WithRetryDuration(25*time.Second),
 		WithStoredEventsSize(66),
 		WithErrorSleepDuration(20*time.Second),
 		WithPublisher(100, publisher, waitChan,
@@ -78,6 +80,7 @@ func TestComputeRunnerOptions(t *testing.T) {
 
 	assert.Same(t, logger, options.logger)
 	assert.Equal(t, uint64(55), options.getEventsLimit)
+	assert.Equal(t, 25*time.Second, options.retryDuration)
 	assert.Equal(t, uint64(66), options.storedEventSize)
 	assert.Equal(t, 20*time.Second, options.errorSleepDuration)
 

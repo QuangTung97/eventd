@@ -61,6 +61,7 @@ func WithPublishLimit(limit uint64) PublisherOption {
 
 type runnerOpts struct {
 	getEventsLimit     uint64
+	retryDuration      time.Duration
 	storedEventSize    uint64
 	errorSleepDuration time.Duration
 	publishers         map[PublisherID]registeredPublisher
@@ -72,6 +73,7 @@ type Option func(opts *runnerOpts)
 
 var defaultRunnerOpts = runnerOpts{
 	getEventsLimit:     DefaultGetEventsLimit,
+	retryDuration:      60 * time.Second,
 	storedEventSize:    DefaultGetEventsLimit,
 	errorSleepDuration: 30 * time.Second,
 	publishers:         map[PublisherID]registeredPublisher{},
@@ -111,6 +113,13 @@ func WithLogger(logger *zap.Logger) Option {
 func WithGetEventsLimit(limit uint64) Option {
 	return func(opts *runnerOpts) {
 		opts.getEventsLimit = limit
+	}
+}
+
+// WithRetryDuration ...
+func WithRetryDuration(d time.Duration) Option {
+	return func(opts *runnerOpts) {
+		opts.retryDuration = d
 	}
 }
 
