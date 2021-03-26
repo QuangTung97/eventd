@@ -130,7 +130,7 @@ OuterLoop:
 					if err != nil {
 						logger.Error("eventd.publisher.run", zap.Error(err))
 						sleepContext(runningCtx, options.errorSleepDuration)
-						return
+						continue
 					}
 				}
 			}()

@@ -33,6 +33,7 @@ type processor struct {
 	lastSequence        uint64
 	beforeFirstSequence uint64
 	waitList            []fetchRequest
+	timer               *time.Timer
 }
 
 func newProcessor(repo Repository, opts runnerOpts) *processor {
@@ -43,6 +44,7 @@ func newProcessor(repo Repository, opts runnerOpts) *processor {
 		storedEvents:        make([]Event, opts.storedEventSize),
 		lastSequence:        0,
 		beforeFirstSequence: 0,
+		timer:               time.NewTimer(opts.retryDuration),
 	}
 }
 
@@ -165,9 +167,14 @@ func (p *processor) run(
 ) error {
 	select {
 	case <-signals:
+		if !p.timer.Stop() {
+			<-p.timer.C
+		}
+		p.timer.Reset(p.retryDuration)
 		return p.handleSignals(ctx, signals)
 
-	case <-time.After(p.retryDuration):
+	case <-p.timer.C:
+		p.timer.Reset(p.retryDuration)
 		return p.handleSignals(ctx, signals)
 
 	case request := <-fetchChan:
