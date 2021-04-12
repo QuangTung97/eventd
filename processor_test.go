@@ -3,47 +3,74 @@ package eventd
 import (
 	"context"
 	"errors"
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
+type processorTest struct {
+	proc *processor
+	repo *RepositoryMock
+}
+
+func newProcessorTest(opts runnerOpts) *processorTest {
+	repo := &RepositoryMock{}
+	proc := newProcessor(repo, opts)
+
+	return &processorTest{
+		repo: repo,
+		proc: proc,
+	}
+}
+
+func (p *processorTest) initWithEvents(events []Event) {
+	p.repo.GetLastEventsFunc = func(ctx context.Context, limit uint64) ([]Event, error) {
+		return events, nil
+	}
+	_ = p.proc.init(context.Background())
+}
+
+func newProcessorTestWithEvents(opts runnerOpts, events []Event) *processorTest {
+	p := newProcessorTest(opts)
+	p.initWithEvents(events)
+	return p
+}
+
 func TestProcessor_Init__GetLastEvents_Error(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+	ctx := newContext()
+	p := newProcessorTest(defaultRunnerOpts)
 
-	repo := NewMockRepository(ctrl)
-	ctx := context.Background()
+	p.repo.GetLastEventsFunc = func(ctx context.Context, limit uint64) ([]Event, error) {
+		return nil, errors.New("get-last-events-error")
+	}
 
-	repo.EXPECT().GetLastEvents(ctx, DefaultGetEventsLimit).
-		Return(nil, errors.New("get-last-events-error"))
+	err := p.proc.init(ctx)
 
-	p := newProcessor(repo, defaultRunnerOpts)
-	err := p.init(ctx)
+	calls := p.repo.GetLastEventsCalls()
+	assert.Equal(t, 1, len(calls))
+	assert.Equal(t, ctx, calls[0].Ctx)
+	assert.Equal(t, uint64(1000), calls[0].Limit)
 	assert.Equal(t, errors.New("get-last-events-error"), err)
 }
 
 func TestProcessor_Init__Without_Last_Events(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+	ctx := newContext()
 
-	repo := NewMockRepository(ctrl)
-	ctx := context.Background()
+	p := newProcessorTest(defaultRunnerOpts)
 
-	repo.EXPECT().GetLastEvents(ctx, DefaultGetEventsLimit).Return(nil, nil)
+	p.repo.GetLastEventsFunc = func(ctx context.Context, limit uint64) ([]Event, error) {
+		return nil, nil
+	}
 
-	p := newProcessor(repo, defaultRunnerOpts)
-	err := p.init(ctx)
+	err := p.proc.init(ctx)
 
+	calls := p.repo.GetLastEventsCalls()
+	assert.Equal(t, 1, len(calls))
 	assert.Equal(t, nil, err)
-	assert.Equal(t, []Event(nil), p.currentEvents())
+	assert.Equal(t, []Event(nil), p.proc.currentEvents())
 }
 
 func TestProcessor_Init__With_Last_Events(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	repo := NewMockRepository(ctrl)
+	repo := &RepositoryMock{}
 	ctx := context.Background()
 
 	events := []Event{
@@ -51,8 +78,9 @@ func TestProcessor_Init__With_Last_Events(t *testing.T) {
 		{ID: 9, Sequence: 6},
 		{ID: 11, Sequence: 7},
 	}
-	repo.EXPECT().GetLastEvents(ctx, DefaultGetEventsLimit).
-		Return(events, nil)
+	repo.GetLastEventsFunc = func(ctx context.Context, limit uint64) ([]Event, error) {
+		return events, nil
+	}
 
 	p := newProcessor(repo, defaultRunnerOpts)
 	err := p.init(ctx)
@@ -62,10 +90,7 @@ func TestProcessor_Init__With_Last_Events(t *testing.T) {
 }
 
 func TestProcessor_Init__With_Last_3_Events__Limit_3(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	repo := NewMockRepository(ctrl)
+	repo := &RepositoryMock{}
 	ctx := context.Background()
 
 	events := []Event{
@@ -73,8 +98,9 @@ func TestProcessor_Init__With_Last_3_Events__Limit_3(t *testing.T) {
 		{ID: 9, Sequence: 6},
 		{ID: 11, Sequence: 7},
 	}
-	repo.EXPECT().GetLastEvents(ctx, uint64(4)).
-		Return(events, nil)
+	repo.GetLastEventsFunc = func(ctx context.Context, limit uint64) ([]Event, error) {
+		return events, nil
+	}
 
 	p := newProcessor(repo, runnerOpts{
 		getEventsLimit:  4,
@@ -82,15 +108,13 @@ func TestProcessor_Init__With_Last_3_Events__Limit_3(t *testing.T) {
 	})
 	err := p.init(ctx)
 
+	assert.Equal(t, uint64(4), repo.GetLastEventsCalls()[0].Limit)
 	assert.Equal(t, nil, err)
 	assert.Equal(t, events, p.currentEvents())
 }
 
 func TestProcessor_Init__With_Last_3_Events__Limit_2(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	repo := NewMockRepository(ctrl)
+	repo := &RepositoryMock{}
 	ctx := context.Background()
 
 	events := []Event{
@@ -98,8 +122,9 @@ func TestProcessor_Init__With_Last_3_Events__Limit_2(t *testing.T) {
 		{ID: 9, Sequence: 6},
 		{ID: 11, Sequence: 7},
 	}
-	repo.EXPECT().GetLastEvents(ctx, uint64(4)).
-		Return(events, nil)
+	repo.GetLastEventsFunc = func(ctx context.Context, limit uint64) ([]Event, error) {
+		return events, nil
+	}
 
 	p := newProcessor(repo, runnerOpts{
 		getEventsLimit:  4,
@@ -112,176 +137,179 @@ func TestProcessor_Init__With_Last_3_Events__Limit_2(t *testing.T) {
 }
 
 func TestProcessor_Signal__GetUnprocessed_Error(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+	ctx := newContext()
 
-	repo := NewMockRepository(ctrl)
-	ctx := context.Background()
-	repo.EXPECT().GetLastEvents(ctx, gomock.Any()).Return(nil, nil)
-	repo.EXPECT().GetUnprocessedEvents(ctx, uint64(4)).
-		Return(nil, errors.New("get-unprocessed-error"))
-
-	p := newProcessor(repo, runnerOpts{
+	p := newProcessorTestWithEvents(runnerOpts{
 		getEventsLimit:  4,
 		storedEventSize: 3,
-	})
-	_ = p.init(ctx)
+	}, nil)
 
-	err := p.signal(ctx)
+	p.repo.GetUnprocessedEventsFunc = func(ctx context.Context, limit uint64) ([]Event, error) {
+		return nil, errors.New("get-unprocessed-error")
+	}
+
+	err := p.proc.signal(ctx)
+
+	calls := p.repo.GetUnprocessedEventsCalls()
+	assert.Equal(t, 1, len(calls))
+	assert.Equal(t, ctx, calls[0].Ctx)
+	assert.Equal(t, uint64(4), calls[0].Limit)
+
 	assert.Equal(t, errors.New("get-unprocessed-error"), err)
 }
 
 func TestProcessor_Signal__Empty_Unprocessed__Without_Stored(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	repo := NewMockRepository(ctrl)
-	ctx := context.Background()
-	repo.EXPECT().GetLastEvents(ctx, gomock.Any()).Return(nil, nil)
-	repo.EXPECT().GetUnprocessedEvents(ctx, uint64(4)).
-		Return(nil, nil)
-
-	p := newProcessor(repo, runnerOpts{
+	ctx := newContext()
+	p := newProcessorTestWithEvents(runnerOpts{
 		getEventsLimit:  4,
 		storedEventSize: 3,
-	})
-	_ = p.init(ctx)
+	}, nil)
 
-	err := p.signal(ctx)
+	p.repo.GetUnprocessedEventsFunc = func(ctx context.Context, limit uint64) ([]Event, error) {
+		return nil, nil
+	}
+
+	err := p.proc.signal(ctx)
 	assert.Equal(t, nil, err)
-	assert.Equal(t, []Event(nil), p.currentEvents())
+	assert.Equal(t, []Event(nil), p.proc.currentEvents())
 }
 
 func TestProcessor_Signal__Empty_Unprocessed__With_Stored(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	repo := NewMockRepository(ctrl)
-	ctx := context.Background()
+	ctx := newContext()
 	events := []Event{
 		{ID: 10, Sequence: 5},
 		{ID: 9, Sequence: 6},
 		{ID: 11, Sequence: 7},
 	}
-	repo.EXPECT().GetLastEvents(ctx, gomock.Any()).Return(events, nil)
-	repo.EXPECT().GetUnprocessedEvents(ctx, uint64(4)).
-		Return(nil, nil)
-
-	p := newProcessor(repo, runnerOpts{
+	p := newProcessorTestWithEvents(runnerOpts{
 		getEventsLimit:  4,
 		storedEventSize: 3,
-	})
-	_ = p.init(ctx)
+	}, events)
 
-	err := p.signal(ctx)
+	p.repo.GetUnprocessedEventsFunc = func(ctx context.Context, limit uint64) ([]Event, error) {
+		return nil, nil
+	}
+
+	err := p.proc.signal(ctx)
 	assert.Equal(t, nil, err)
-	assert.Equal(t, events, p.currentEvents())
+	assert.Equal(t, events, p.proc.currentEvents())
 }
 
 func TestProcessor_Signal__4_Unprocessed__Update_Error(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+	ctx := newContext()
+	p := newProcessorTestWithEvents(runnerOpts{
+		getEventsLimit:  4,
+		storedEventSize: 3,
+	}, nil)
 
-	repo := NewMockRepository(ctrl)
-	ctx := context.Background()
-	repo.EXPECT().GetLastEvents(ctx, gomock.Any()).Return(nil, nil)
-	repo.EXPECT().GetUnprocessedEvents(ctx, gomock.Any()).
-		Return([]Event{
+	p.repo.GetUnprocessedEventsFunc = func(ctx context.Context, limit uint64) ([]Event, error) {
+		return []Event{
 			{ID: 10},
 			{ID: 12},
 			{ID: 7},
 			{ID: 15},
-		}, nil)
+		}, nil
+	}
 
-	repo.EXPECT().UpdateSequences(ctx, []Event{
+	updatedEvents := []Event{
 		{ID: 10, Sequence: 1},
 		{ID: 12, Sequence: 2},
 		{ID: 7, Sequence: 3},
 		{ID: 15, Sequence: 4},
-	}).Return(errors.New("update-sequences-error"))
+	}
+	p.repo.UpdateSequencesFunc = func(ctx context.Context, events []Event) error {
+		return errors.New("update-sequences-error")
+	}
 
-	p := newProcessor(repo, runnerOpts{
-		getEventsLimit:  4,
-		storedEventSize: 3,
-	})
-	_ = p.init(ctx)
+	err := p.proc.signal(ctx)
 
-	err := p.signal(ctx)
+	calls := p.repo.UpdateSequencesCalls()
+	assert.Equal(t, 1, len(calls))
+	assert.Equal(t, updatedEvents, calls[0].Events)
+
 	assert.Equal(t, errors.New("update-sequences-error"), err)
-	assert.Equal(t, []Event(nil), p.currentEvents())
+	assert.Equal(t, []Event(nil), p.proc.currentEvents())
 }
 
 func TestProcessor_Signal__4_Unprocessed__Update_OK(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+	ctx := newContext()
+	p := newProcessorTestWithEvents(runnerOpts{
+		getEventsLimit:  4,
+		storedEventSize: 3,
+	}, nil)
 
-	repo := NewMockRepository(ctrl)
-	ctx := context.Background()
-	repo.EXPECT().GetLastEvents(ctx, gomock.Any()).Return(nil, nil)
-	repo.EXPECT().GetUnprocessedEvents(ctx, gomock.Any()).
-		Return([]Event{
+	p.repo.GetUnprocessedEventsFunc = func(ctx context.Context, limit uint64) ([]Event, error) {
+		return []Event{
 			{ID: 10},
 			{ID: 12},
 			{ID: 7},
 			{ID: 15},
-		}, nil)
+		}, nil
+	}
 
-	repo.EXPECT().UpdateSequences(ctx, []Event{
+	updatedEvents := []Event{
 		{ID: 10, Sequence: 1},
 		{ID: 12, Sequence: 2},
 		{ID: 7, Sequence: 3},
 		{ID: 15, Sequence: 4},
-	}).Return(nil)
+	}
+	p.repo.UpdateSequencesFunc = func(ctx context.Context, events []Event) error {
+		return nil
+	}
 
-	p := newProcessor(repo, runnerOpts{
-		getEventsLimit:  4,
-		storedEventSize: 3,
-	})
-	_ = p.init(ctx)
+	err := p.proc.signal(ctx)
 
-	err := p.signal(ctx)
+	calls := p.repo.UpdateSequencesCalls()
+	assert.Equal(t, 1, len(calls))
+	assert.Equal(t, updatedEvents, calls[0].Events)
+
 	assert.Equal(t, nil, err)
 	assert.Equal(t, []Event{
 		{ID: 12, Sequence: 2},
 		{ID: 7, Sequence: 3},
 		{ID: 15, Sequence: 4},
-	}, p.currentEvents())
+	}, p.proc.currentEvents())
+	assert.Equal(t, uint64(4), p.proc.getLastSequence())
 }
 
 func TestProcessor_Signal__With_Stored__OK(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	repo := NewMockRepository(ctrl)
-	ctx := context.Background()
+	ctx := newContext()
 	events := []Event{
 		{ID: 3, Sequence: 5},
 		{ID: 6, Sequence: 6},
 		{ID: 5, Sequence: 7},
 	}
-	repo.EXPECT().GetLastEvents(ctx, gomock.Any()).Return(events, nil)
-	repo.EXPECT().GetUnprocessedEvents(ctx, gomock.Any()).
-		Return([]Event{
+
+	p := newProcessorTestWithEvents(runnerOpts{
+		getEventsLimit:  4,
+		storedEventSize: 5,
+	}, events)
+
+	p.repo.GetUnprocessedEventsFunc = func(ctx context.Context, limit uint64) ([]Event, error) {
+		return []Event{
 			{ID: 10},
 			{ID: 12},
 			{ID: 7},
 			{ID: 15},
-		}, nil)
+		}, nil
+	}
 
-	repo.EXPECT().UpdateSequences(ctx, []Event{
+	updatedEvents := []Event{
 		{ID: 10, Sequence: 8},
 		{ID: 12, Sequence: 9},
 		{ID: 7, Sequence: 10},
 		{ID: 15, Sequence: 11},
-	}).Return(nil)
+	}
+	p.repo.UpdateSequencesFunc = func(ctx context.Context, events []Event) error {
+		return nil
+	}
 
-	p := newProcessor(repo, runnerOpts{
-		getEventsLimit:  4,
-		storedEventSize: 5,
-	})
-	_ = p.init(ctx)
+	err := p.proc.signal(ctx)
 
-	err := p.signal(ctx)
+	calls := p.repo.UpdateSequencesCalls()
+	assert.Equal(t, 1, len(calls))
+	assert.Equal(t, updatedEvents, calls[0].Events)
+
 	assert.Equal(t, nil, err)
 	assert.Equal(t, []Event{
 		{ID: 5, Sequence: 7},
@@ -289,28 +317,20 @@ func TestProcessor_Signal__With_Stored__OK(t *testing.T) {
 		{ID: 12, Sequence: 9},
 		{ID: 7, Sequence: 10},
 		{ID: 15, Sequence: 11},
-	}, p.currentEvents())
-	assert.Equal(t, uint64(11), p.getLastSequence())
+	}, p.proc.currentEvents())
+	assert.Equal(t, uint64(11), p.proc.getLastSequence())
 }
 
 func TestProcessor_Check_From_Sequence(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	repo := NewMockRepository(ctrl)
-	ctx := context.Background()
 	events := []Event{
 		{ID: 3, Sequence: 5},
 		{ID: 6, Sequence: 6},
 		{ID: 5, Sequence: 7},
 	}
-	repo.EXPECT().GetLastEvents(ctx, gomock.Any()).Return(events, nil)
-
-	p := newProcessor(repo, runnerOpts{
+	p := newProcessorTestWithEvents(runnerOpts{
 		getEventsLimit:  4,
 		storedEventSize: 5,
-	})
-	_ = p.init(ctx)
+	}, events)
 
 	table := []struct {
 		name   string
@@ -345,46 +365,38 @@ func TestProcessor_Check_From_Sequence(t *testing.T) {
 	}
 	for _, e := range table {
 		t.Run(e.name, func(t *testing.T) {
-			status := p.checkFromSequence(e.from)
+			status := p.proc.checkFromSequence(e.from)
 			assert.Equal(t, e.status, status)
 		})
 	}
 }
 
 func TestProcessor_Get_Events_From(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	repo := NewMockRepository(ctrl)
-	ctx := context.Background()
 	events := []Event{
 		{ID: 3, Sequence: 5},
 		{ID: 6, Sequence: 6},
 		{ID: 5, Sequence: 7},
 	}
-	repo.EXPECT().GetLastEvents(ctx, gomock.Any()).Return(events, nil)
-
-	p := newProcessor(repo, runnerOpts{
+	p := newProcessorTestWithEvents(runnerOpts{
 		getEventsLimit:  4,
 		storedEventSize: 5,
-	})
-	_ = p.init(ctx)
+	}, events)
 
-	assert.Equal(t, uint64(7), p.getLastSequence())
+	assert.Equal(t, uint64(7), p.proc.getLastSequence())
 
-	result := p.getEventsFrom(5, nil, 1)
+	result := p.proc.getEventsFrom(5, nil, 1)
 	assert.Equal(t, []Event{
 		{ID: 3, Sequence: 5},
 	}, result)
 
-	result = p.getEventsFrom(5, nil, 3)
+	result = p.proc.getEventsFrom(5, nil, 3)
 	assert.Equal(t, []Event{
 		{ID: 3, Sequence: 5},
 		{ID: 6, Sequence: 6},
 		{ID: 5, Sequence: 7},
 	}, result)
 
-	result = p.getEventsFrom(5, nil, 4)
+	result = p.proc.getEventsFrom(5, nil, 4)
 	assert.Equal(t, []Event{
 		{ID: 3, Sequence: 5},
 		{ID: 6, Sequence: 6},
@@ -393,135 +405,122 @@ func TestProcessor_Get_Events_From(t *testing.T) {
 }
 
 func TestProcessor_Run_Context_Cancelled(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	repo := NewMockRepository(ctrl)
-	ctx := context.Background()
-	events := []Event{
-		{ID: 3, Sequence: 5},
-		{ID: 6, Sequence: 6},
-		{ID: 5, Sequence: 7},
-	}
-	repo.EXPECT().GetLastEvents(ctx, gomock.Any()).Return(events, nil)
-
-	p := newProcessor(repo, runnerOpts{
+	p := newProcessorTestWithEvents(runnerOpts{
 		getEventsLimit:  4,
 		storedEventSize: 5,
-	})
-	_ = p.init(ctx)
+	}, nil)
 
+	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
 	cancel()
 
-	err := p.run(ctx, nil, nil)
+	err := p.proc.run(ctx, nil, nil)
 	assert.Nil(t, err)
 }
 
 func TestProcessor_Run_Signal(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	repo := NewMockRepository(ctrl)
-	ctx := context.Background()
+	ctx := newContext()
 	events := []Event{
 		{ID: 3, Sequence: 5},
 		{ID: 6, Sequence: 6},
 		{ID: 5, Sequence: 7},
 	}
-	repo.EXPECT().GetLastEvents(ctx, gomock.Any()).Return(events, nil)
-
-	p := newProcessor(repo, runnerOpts{
+	p := newProcessorTestWithEvents(runnerOpts{
 		getEventsLimit:  4,
 		storedEventSize: 5,
-	})
-	_ = p.init(ctx)
+	}, events)
 
-	repo.EXPECT().GetUnprocessedEvents(ctx, gomock.Any()).
-		Return([]Event{
+	p.repo.GetUnprocessedEventsFunc = func(ctx context.Context, limit uint64) ([]Event, error) {
+		return []Event{
 			{ID: 10},
 			{ID: 12},
 			{ID: 7},
 			{ID: 15},
-		}, nil)
-	repo.EXPECT().UpdateSequences(ctx, []Event{
+		}, nil
+	}
+	p.repo.UpdateSequencesFunc = func(ctx context.Context, events []Event) error {
+		return nil
+	}
+
+	updated := []Event{
 		{ID: 10, Sequence: 8},
 		{ID: 12, Sequence: 9},
 		{ID: 7, Sequence: 10},
 		{ID: 15, Sequence: 11},
-	}).Return(nil)
+	}
 
 	signals := make(chan struct{}, 1)
 	signals <- struct{}{}
 
-	err := p.run(ctx, signals, nil)
+	err := p.proc.run(ctx, signals, nil)
+
+	calls := p.repo.UpdateSequencesCalls()
+	assert.Equal(t, 1, len(calls))
+	assert.Equal(t, updated, calls[0].Events)
+
 	assert.Nil(t, err)
-	assert.Equal(t, uint64(11), p.getLastSequence())
+	assert.Equal(t, uint64(11), p.proc.getLastSequence())
 	assert.Equal(t, 0, len(signals))
 }
 
 func TestProcessor_Run_Multiple_Signals(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	repo := NewMockRepository(ctrl)
-	ctx := context.Background()
+	ctx := newContext()
 	events := []Event{
 		{ID: 3, Sequence: 5},
 		{ID: 6, Sequence: 6},
 		{ID: 5, Sequence: 7},
 	}
-	repo.EXPECT().GetLastEvents(ctx, gomock.Any()).Return(events, nil)
-
-	p := newProcessor(repo, runnerOpts{
+	p := newProcessorTestWithEvents(runnerOpts{
 		getEventsLimit:  4,
 		storedEventSize: 5,
-	})
-	_ = p.init(ctx)
+	}, events)
 
-	repo.EXPECT().GetUnprocessedEvents(ctx, gomock.Any()).
-		Return([]Event{
+	p.repo.GetUnprocessedEventsFunc = func(ctx context.Context, limit uint64) ([]Event, error) {
+		return []Event{
 			{ID: 10},
 			{ID: 12},
 			{ID: 7},
 			{ID: 15},
-		}, nil)
-	repo.EXPECT().UpdateSequences(ctx, []Event{
+		}, nil
+	}
+	p.repo.UpdateSequencesFunc = func(ctx context.Context, events []Event) error {
+		return nil
+	}
+
+	updated := []Event{
 		{ID: 10, Sequence: 8},
 		{ID: 12, Sequence: 9},
 		{ID: 7, Sequence: 10},
 		{ID: 15, Sequence: 11},
-	}).Return(nil)
+	}
 
 	signals := make(chan struct{}, 3)
 	signals <- struct{}{}
 	signals <- struct{}{}
 	signals <- struct{}{}
 
-	err := p.run(ctx, signals, nil)
+	err := p.proc.run(ctx, signals, nil)
+
+	calls := p.repo.UpdateSequencesCalls()
+	assert.Equal(t, 1, len(calls))
+	assert.Equal(t, updated, calls[0].Events)
+
 	assert.Nil(t, err)
-	assert.Equal(t, uint64(11), p.getLastSequence())
+	assert.Equal(t, uint64(11), p.proc.getLastSequence())
 	assert.Equal(t, 0, len(signals))
 }
 
 func TestProcessor_Run_Fetch__Not_Existed(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	repo := NewMockRepository(ctrl)
-	ctx := context.Background()
+	ctx := newContext()
 	events := []Event{
 		{ID: 3, Sequence: 5},
 		{ID: 6, Sequence: 6},
 		{ID: 5, Sequence: 7},
 	}
-	repo.EXPECT().GetLastEvents(ctx, gomock.Any()).Return(events, nil)
-
-	p := newProcessor(repo, runnerOpts{
+	p := newProcessorTestWithEvents(runnerOpts{
 		getEventsLimit:  4,
 		storedEventSize: 5,
-	})
-	_ = p.init(ctx)
+	}, events)
 
 	respChan := make(chan fetchResponse, 1)
 
@@ -533,7 +532,8 @@ func TestProcessor_Run_Fetch__Not_Existed(t *testing.T) {
 		responseChan: respChan,
 	}
 
-	err := p.run(ctx, nil, fetchChan)
+	err := p.proc.run(ctx, nil, fetchChan)
+
 	assert.Nil(t, err)
 	assert.Equal(t, 0, len(fetchChan))
 	resp := <-respChan
@@ -543,23 +543,16 @@ func TestProcessor_Run_Fetch__Not_Existed(t *testing.T) {
 }
 
 func TestProcessor_Run_Fetch__Existed(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	repo := NewMockRepository(ctrl)
-	ctx := context.Background()
+	ctx := newContext()
 	events := []Event{
 		{ID: 3, Sequence: 5},
 		{ID: 6, Sequence: 6},
 		{ID: 5, Sequence: 7},
 	}
-	repo.EXPECT().GetLastEvents(ctx, gomock.Any()).Return(events, nil)
-
-	p := newProcessor(repo, runnerOpts{
+	p := newProcessorTestWithEvents(runnerOpts{
 		getEventsLimit:  4,
 		storedEventSize: 5,
-	})
-	_ = p.init(ctx)
+	}, events)
 
 	respChan := make(chan fetchResponse, 1)
 
@@ -571,7 +564,8 @@ func TestProcessor_Run_Fetch__Existed(t *testing.T) {
 		responseChan: respChan,
 	}
 
-	err := p.run(ctx, nil, fetchChan)
+	err := p.proc.run(ctx, nil, fetchChan)
+
 	assert.Nil(t, err)
 	assert.Equal(t, 0, len(fetchChan))
 	resp := <-respChan
@@ -585,23 +579,16 @@ func TestProcessor_Run_Fetch__Existed(t *testing.T) {
 }
 
 func TestProcessor_Run_Fetch__Wait(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	repo := NewMockRepository(ctrl)
-	ctx := context.Background()
+	ctx := newContext()
 	events := []Event{
 		{ID: 3, Sequence: 5},
 		{ID: 6, Sequence: 6},
 		{ID: 5, Sequence: 7},
 	}
-	repo.EXPECT().GetLastEvents(ctx, gomock.Any()).Return(events, nil)
-
-	p := newProcessor(repo, runnerOpts{
+	p := newProcessorTestWithEvents(runnerOpts{
 		getEventsLimit:  4,
 		storedEventSize: 5,
-	})
-	_ = p.init(ctx)
+	}, events)
 
 	respChan := make(chan fetchResponse, 3)
 
@@ -625,9 +612,9 @@ func TestProcessor_Run_Fetch__Wait(t *testing.T) {
 		responseChan: respChan,
 	}
 
-	_ = p.run(ctx, nil, fetchChan)
-	_ = p.run(ctx, nil, fetchChan)
-	_ = p.run(ctx, nil, fetchChan)
+	_ = p.proc.run(ctx, nil, fetchChan)
+	_ = p.proc.run(ctx, nil, fetchChan)
+	_ = p.proc.run(ctx, nil, fetchChan)
 
 	assert.Equal(t, 0, len(fetchChan))
 	assert.Equal(t, 1, len(respChan))
@@ -641,20 +628,19 @@ func TestProcessor_Run_Fetch__Wait(t *testing.T) {
 		},
 	}, resp)
 
-	repo.EXPECT().GetUnprocessedEvents(ctx, gomock.Any()).
-		Return([]Event{
+	p.repo.GetUnprocessedEventsFunc = func(ctx context.Context, limit uint64) ([]Event, error) {
+		return []Event{
 			{ID: 10},
 			{ID: 12},
-		}, nil)
-
-	repo.EXPECT().UpdateSequences(ctx, []Event{
-		{ID: 10, Sequence: 8},
-		{ID: 12, Sequence: 9},
-	}).Return(nil)
+		}, nil
+	}
+	p.repo.UpdateSequencesFunc = func(ctx context.Context, events []Event) error {
+		return nil
+	}
 
 	signals := make(chan struct{}, 1)
 	signals <- struct{}{}
-	_ = p.run(ctx, signals, nil)
+	_ = p.proc.run(ctx, signals, nil)
 
 	assert.Equal(t, 2, len(respChan))
 
@@ -678,23 +664,16 @@ func TestProcessor_Run_Fetch__Wait(t *testing.T) {
 }
 
 func TestProcessor_Run_Fetch__Wait_And_Wait(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	repo := NewMockRepository(ctrl)
-	ctx := context.Background()
+	ctx := newContext()
 	events := []Event{
 		{ID: 3, Sequence: 5},
 		{ID: 6, Sequence: 6},
 		{ID: 5, Sequence: 7},
 	}
-	repo.EXPECT().GetLastEvents(ctx, gomock.Any()).Return(events, nil)
-
-	p := newProcessor(repo, runnerOpts{
+	p := newProcessorTestWithEvents(runnerOpts{
 		getEventsLimit:  4,
 		storedEventSize: 5,
-	})
-	_ = p.init(ctx)
+	}, events)
 
 	respChan := make(chan fetchResponse, 3)
 	fetchChan := make(chan fetchRequest, 3)
@@ -707,20 +686,20 @@ func TestProcessor_Run_Fetch__Wait_And_Wait(t *testing.T) {
 		responseChan: respChan,
 	}
 
-	_ = p.run(ctx, signals, fetchChan)
+	_ = p.proc.run(ctx, signals, fetchChan)
 	assert.Equal(t, 0, len(respChan))
 
 	signals <- struct{}{}
-	repo.EXPECT().GetUnprocessedEvents(ctx, gomock.Any()).
-		Return([]Event{
+	p.repo.GetUnprocessedEventsFunc = func(ctx context.Context, limit uint64) ([]Event, error) {
+		return []Event{
 			{ID: 10},
-		}, nil)
+		}, nil
+	}
+	p.repo.UpdateSequencesFunc = func(ctx context.Context, events []Event) error {
+		return nil
+	}
 
-	repo.EXPECT().UpdateSequences(ctx, []Event{
-		{ID: 10, Sequence: 8},
-	}).Return(nil)
-
-	_ = p.run(ctx, signals, fetchChan)
+	_ = p.proc.run(ctx, signals, fetchChan)
 
 	resp := <-respChan
 	assert.Equal(t, fetchResponse{
@@ -743,18 +722,17 @@ func TestProcessor_Run_Fetch__Wait_And_Wait(t *testing.T) {
 		responseChan: respChan,
 	}
 
-	_ = p.run(ctx, signals, fetchChan)
-	_ = p.run(ctx, signals, fetchChan)
-	signals <- struct{}{}
-	repo.EXPECT().GetUnprocessedEvents(ctx, gomock.Any()).
-		Return([]Event{
-			{ID: 19},
-		}, nil)
+	_ = p.proc.run(ctx, signals, fetchChan)
+	_ = p.proc.run(ctx, signals, fetchChan)
 
-	repo.EXPECT().UpdateSequences(ctx, []Event{
-		{ID: 19, Sequence: 9},
-	}).Return(nil)
-	_ = p.run(ctx, signals, fetchChan)
+	signals <- struct{}{}
+	p.repo.GetUnprocessedEventsFunc = func(ctx context.Context, limit uint64) ([]Event, error) {
+		return []Event{
+			{ID: 19},
+		}, nil
+	}
+
+	_ = p.proc.run(ctx, signals, fetchChan)
 
 	assert.Equal(t, 2, len(respChan))
 

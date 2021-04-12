@@ -4,8 +4,8 @@ go 1.14
 
 require (
 	github.com/fzipp/gocyclo v0.3.1
-	github.com/golang/mock v1.5.0
 	github.com/kisielk/errcheck v1.6.0
+	github.com/matryer/moq v0.2.1
 	github.com/stretchr/testify v1.7.0
 	go.uber.org/multierr v1.6.0 // indirect
 	go.uber.org/zap v1.16.0

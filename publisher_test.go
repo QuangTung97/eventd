@@ -3,7 +3,6 @@ package eventd
 import (
 	"context"
 	"errors"
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
@@ -149,53 +148,82 @@ func TestPublisherProcessedList_Exceeded(t *testing.T) {
 
 // PUBLISHER RUNNER
 
+type publisherTest struct {
+	repo      *RepositoryMock
+	publisher *PublisherMock
+	runner    *publisherRunner
+}
+
+func newPublisherTest(id PublisherID, fetchChan chan<- fetchRequest,
+	options publisherOpts,
+) *publisherTest {
+	repo := &RepositoryMock{}
+	publisher := &PublisherMock{}
+	runner := newPublisherRunner(id, repo, publisher, fetchChan, options)
+	return &publisherTest{
+		repo:      repo,
+		publisher: publisher,
+		runner:    runner,
+	}
+}
+
+func (p *publisherTest) initWithLastSequence(seq uint64) {
+	p.repo.GetLastSequenceFunc = func(ctx context.Context, id PublisherID) (uint64, error) {
+		return seq, nil
+	}
+	_ = p.runner.init(context.Background())
+}
+
+func (p *publisherTest) stubPublishing() {
+	p.publisher.PublishFunc = func(ctx context.Context, events []Event) error {
+		return nil
+	}
+	p.repo.SaveLastSequenceFunc = func(ctx context.Context, id PublisherID, seq uint64) error {
+		return nil
+	}
+}
+
+func newContext() context.Context {
+	return context.Background()
+}
+
 func TestPublisherRunner_Init_Error(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+	ctx := newContext()
+	p := newPublisherTest(5, nil, publisherOpts{
+		waitListLimit: 3,
+	})
 
-	repo := NewMockRepository(ctrl)
-	p := NewMockPublisher(ctrl)
+	p.repo.GetLastSequenceFunc = func(ctx context.Context, id PublisherID) (uint64, error) {
+		return 0, errors.New("get-last-seq-error")
+	}
 
-	ctx := context.Background()
+	err := p.runner.init(ctx)
 
-	repo.EXPECT().GetLastSequence(ctx, PublisherID(5)).
-		Return(uint64(0), errors.New("get-last-seq-error"))
+	calls := p.repo.GetLastSequenceCalls()
+	assert.Equal(t, 1, len(calls))
+	assert.Equal(t, ctx, calls[0].Ctx)
+	assert.Equal(t, PublisherID(5), calls[0].ID)
 
-	r := newPublisherRunner(
-		5, repo, p, nil,
-		publisherOpts{
-			waitListLimit: 3,
-		})
-
-	err := r.init(ctx)
 	assert.Equal(t, errors.New("get-last-seq-error"), err)
-	assert.False(t, r.isFetching())
+	assert.False(t, p.runner.isFetching())
 }
 
 func TestPublisherRunner_Fetch(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	repo := NewMockRepository(ctrl)
-	p := NewMockPublisher(ctrl)
-
-	repo.EXPECT().GetLastSequence(gomock.Any(), gomock.Any()).
-		Return(uint64(50), nil)
-
 	fetchChan := make(chan fetchRequest, 1)
+	p := newPublisherTest(5, fetchChan, publisherOpts{
+		waitListLimit: 3,
+		publishLimit:  5,
+	})
 
-	r := newPublisherRunner(
-		5, repo, p, fetchChan,
-		publisherOpts{
-			waitListLimit: 3,
-			publishLimit:  5,
-		})
+	p.repo.GetLastSequenceFunc = func(ctx context.Context, id PublisherID) (uint64, error) {
+		return 50, nil
+	}
 
-	ctx := context.Background()
-	err := r.init(ctx)
-	assert.Equal(t, nil, err)
+	err := p.runner.init(context.Background())
+	assert.Nil(t, err)
+	assert.Equal(t, 1, len(p.repo.GetLastSequenceCalls()))
 
-	r.fetch()
+	p.runner.fetch()
 
 	assert.Equal(t, 1, len(fetchChan))
 	req := <-fetchChan
@@ -204,32 +232,22 @@ func TestPublisherRunner_Fetch(t *testing.T) {
 	assert.Equal(t, 5, cap(req.result))
 	assert.Equal(t, 0, len(req.result))
 	assert.NotNil(t, req.responseChan)
-	assert.True(t, r.isFetching())
+	assert.True(t, p.runner.isFetching())
 }
 
-func TestPublisherRunner_Run__Publish_Error(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	repo := NewMockRepository(ctrl)
-	p := NewMockPublisher(ctrl)
-
-	repo.EXPECT().GetLastSequence(gomock.Any(), gomock.Any()).
-		Return(uint64(50), nil)
-
+func TestPublisherRunner_Run__Processor_Response_Existed_Not_True(t *testing.T) {
+	// TODO
 	fetchChan := make(chan fetchRequest, 1)
+	p := newPublisherTest(5, fetchChan, publisherOpts{
+		waitListLimit: 3,
+		publishLimit:  5,
+	})
+	ctx := newContext()
 
-	r := newPublisherRunner(
-		5, repo, p, fetchChan,
-		publisherOpts{
-			waitListLimit: 3,
-			publishLimit:  5,
-		})
+	p.initWithLastSequence(50)
 
-	ctx := context.Background()
-	_ = r.init(ctx)
+	p.runner.fetch()
 
-	r.fetch()
 	req := <-fetchChan
 	req.responseChan <- fetchResponse{
 		existed: true,
@@ -239,39 +257,82 @@ func TestPublisherRunner_Run__Publish_Error(t *testing.T) {
 		},
 	}
 
-	p.EXPECT().Publish(ctx, []Event{
+	p.publisher.PublishFunc = func(ctx context.Context, events []Event) error {
+		return errors.New("publish-error")
+	}
+
+	published := []Event{
 		{ID: 5, Sequence: 20},
 		{ID: 3, Sequence: 21},
-	}).Return(errors.New("publish-error"))
+	}
 
-	err := r.run(ctx, nil)
+	err := p.runner.run(ctx, nil)
+
+	calls := p.publisher.PublishCalls()
+	assert.Equal(t, 1, len(calls))
+	assert.Equal(t, ctx, calls[0].Ctx)
+	assert.Equal(t, published, calls[0].Events)
+
 	assert.Equal(t, errors.New("publish-error"), err)
 }
 
-func TestPublisherRunner_Run__Save_Last_Seq_Error(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	repo := NewMockRepository(ctrl)
-	p := NewMockPublisher(ctrl)
-
-	repo.EXPECT().GetLastSequence(gomock.Any(), gomock.Any()).
-		Return(uint64(13), nil)
-
+func TestPublisherRunner_Run__Publish_Error(t *testing.T) {
 	fetchChan := make(chan fetchRequest, 1)
+	p := newPublisherTest(
+		5, fetchChan,
+		publisherOpts{
+			waitListLimit: 3,
+			publishLimit:  5,
+		},
+	)
+	p.initWithLastSequence(50)
+	ctx := newContext()
 
-	r := newPublisherRunner(
-		11, repo, p, fetchChan,
+	p.runner.fetch()
+
+	req := <-fetchChan
+	req.responseChan <- fetchResponse{
+		existed: true,
+		result: []Event{
+			{ID: 5, Sequence: 20},
+			{ID: 3, Sequence: 21},
+		},
+	}
+
+	p.publisher.PublishFunc = func(ctx context.Context, events []Event) error {
+		return errors.New("publish-error")
+	}
+
+	published := []Event{
+		{ID: 5, Sequence: 20},
+		{ID: 3, Sequence: 21},
+	}
+
+	err := p.runner.run(ctx, nil)
+	assert.Equal(t, errors.New("publish-error"), err)
+
+	calls := p.publisher.PublishCalls()
+	assert.Equal(t, 1, len(calls))
+	assert.Equal(t, ctx, calls[0].Ctx)
+	assert.Equal(t, published, calls[0].Events)
+
+	assert.Equal(t, uint64(50), p.runner.lastSequence)
+}
+
+func TestPublisherRunner_Run__Save_Last_Seq_Error(t *testing.T) {
+	fetchChan := make(chan fetchRequest, 1)
+	p := newPublisherTest(
+		11, fetchChan,
 		publisherOpts{
 			processedListLimit: 4,
 			waitListLimit:      3,
 			publishLimit:       5,
 		})
+	p.initWithLastSequence(13)
 
-	ctx := context.Background()
-	_ = r.init(ctx)
+	ctx := newContext()
 
-	r.fetch()
+	p.runner.fetch()
 	req := <-fetchChan
 	req.responseChan <- fetchResponse{
 		existed: true,
@@ -280,76 +341,59 @@ func TestPublisherRunner_Run__Save_Last_Seq_Error(t *testing.T) {
 			{ID: 3, Sequence: 21},
 		},
 	}
+	p.publisher.PublishFunc = func(ctx context.Context, events []Event) error {
+		return nil
+	}
 
-	p.EXPECT().Publish(ctx, []Event{
-		{ID: 5, Sequence: 20},
-		{ID: 3, Sequence: 21},
-	}).Return(nil)
-	repo.EXPECT().SaveLastSequence(ctx, PublisherID(11), uint64(21)).
-		Return(errors.New("save-last-seq-error"))
+	p.repo.SaveLastSequenceFunc = func(ctx context.Context, id PublisherID, seq uint64) error {
+		return errors.New("save-last-seq-error")
+	}
 
-	err := r.run(ctx, nil)
+	err := p.runner.run(ctx, nil)
+
+	calls := p.repo.SaveLastSequenceCalls()
+	assert.Equal(t, 1, len(calls))
+	assert.Equal(t, PublisherID(11), calls[0].ID)
+	assert.Equal(t, uint64(21), calls[0].Seq)
+
 	assert.Equal(t, errors.New("save-last-seq-error"), err)
-	assert.Equal(t, uint64(13), r.lastSequence)
+	assert.Equal(t, uint64(13), p.runner.lastSequence)
 }
 
 func TestPublisherRunner_Run__Context_Cancelled(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	repo := NewMockRepository(ctrl)
-	p := NewMockPublisher(ctrl)
-
-	repo.EXPECT().GetLastSequence(gomock.Any(), gomock.Any()).
-		Return(uint64(50), nil)
-
 	fetchChan := make(chan fetchRequest, 1)
-
-	r := newPublisherRunner(
-		11, repo, p, fetchChan,
+	p := newPublisherTest(
+		11, fetchChan,
 		publisherOpts{
 			waitListLimit: 3,
 			publishLimit:  5,
 		})
+	p.initWithLastSequence(50)
+
+	p.runner.fetch()
 
 	ctx := context.Background()
-	_ = r.init(ctx)
-	r.fetch()
-
 	ctx, cancel := context.WithCancel(ctx)
 	cancel()
 
-	err := r.run(ctx, nil)
+	err := p.runner.run(ctx, nil)
 	assert.Equal(t, context.Canceled, err)
 }
 
 func TestPublisherRunner_Run__Response_To_Wait__After_Recv_Resp_From_Processor(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	repo := NewMockRepository(ctrl)
-	p := NewMockPublisher(ctrl)
-
-	repo.EXPECT().GetLastSequence(gomock.Any(), gomock.Any()).
-		Return(uint64(50), nil)
-	p.EXPECT().Publish(gomock.Any(), gomock.Any()).Return(nil)
-	repo.EXPECT().SaveLastSequence(gomock.Any(), gomock.Any(), gomock.Any()).
-		Return(nil)
-
 	fetchChan := make(chan fetchRequest, 1)
-
-	r := newPublisherRunner(
-		11, repo, p, fetchChan,
+	p := newPublisherTest(
+		11, fetchChan,
 		publisherOpts{
 			processedListLimit: 4,
 			waitListLimit:      3,
 			publishLimit:       5,
 		})
+	p.initWithLastSequence(50)
+	p.stubPublishing()
+	ctx := newContext()
 
-	ctx := context.Background()
-	_ = r.init(ctx)
-
-	r.fetch()
+	p.runner.fetch()
 
 	waitRespChan := make(chan uint64, 1)
 	waitReqChan := make(chan waitRequest, 1)
@@ -358,7 +402,7 @@ func TestPublisherRunner_Run__Response_To_Wait__After_Recv_Resp_From_Processor(t
 		responseChan: waitRespChan,
 	}
 
-	_ = r.run(ctx, waitReqChan)
+	_ = p.runner.run(ctx, waitReqChan)
 
 	req := <-fetchChan
 	req.responseChan <- fetchResponse{
@@ -369,7 +413,7 @@ func TestPublisherRunner_Run__Response_To_Wait__After_Recv_Resp_From_Processor(t
 		},
 	}
 
-	err := r.run(ctx, waitReqChan)
+	err := p.runner.run(ctx, waitReqChan)
 
 	assert.Equal(t, nil, err)
 	assert.Equal(t, 0, len(waitReqChan))
@@ -377,37 +421,24 @@ func TestPublisherRunner_Run__Response_To_Wait__After_Recv_Resp_From_Processor(t
 	resp := <-waitRespChan
 	assert.Equal(t, uint64(21), resp)
 
-	assert.Equal(t, uint64(21), r.lastSequence)
-	assert.False(t, r.isFetching())
+	assert.Equal(t, uint64(21), p.runner.lastSequence)
+	assert.False(t, p.runner.isFetching())
 }
 
 func TestPublisherRunner_Run__Response_To_Wait__Right_After_Wait_Request(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	repo := NewMockRepository(ctrl)
-	p := NewMockPublisher(ctrl)
-
-	repo.EXPECT().GetLastSequence(gomock.Any(), gomock.Any()).
-		Return(uint64(50), nil)
-	p.EXPECT().Publish(gomock.Any(), gomock.Any()).Return(nil)
-	repo.EXPECT().SaveLastSequence(gomock.Any(), gomock.Any(), gomock.Any()).
-		Return(nil)
-
 	fetchChan := make(chan fetchRequest, 1)
-
-	r := newPublisherRunner(
-		11, repo, p, fetchChan,
+	p := newPublisherTest(
+		11, fetchChan,
 		publisherOpts{
 			processedListLimit: 4,
 			waitListLimit:      3,
 			publishLimit:       5,
 		})
+	p.initWithLastSequence(50)
+	p.stubPublishing()
+	ctx := newContext()
 
-	ctx := context.Background()
-	_ = r.init(ctx)
-
-	r.fetch()
+	p.runner.fetch()
 
 	req := <-fetchChan
 	req.responseChan <- fetchResponse{
@@ -418,7 +449,7 @@ func TestPublisherRunner_Run__Response_To_Wait__Right_After_Wait_Request(t *test
 		},
 	}
 
-	err := r.run(ctx, nil)
+	err := p.runner.run(ctx, nil)
 
 	waitRespChan := make(chan uint64, 1)
 	waitReqChan := make(chan waitRequest, 1)
@@ -427,7 +458,7 @@ func TestPublisherRunner_Run__Response_To_Wait__Right_After_Wait_Request(t *test
 		responseChan: waitRespChan,
 	}
 
-	_ = r.run(ctx, waitReqChan)
+	_ = p.runner.run(ctx, waitReqChan)
 
 	assert.Equal(t, nil, err)
 	assert.Equal(t, 0, len(waitReqChan))
@@ -435,6 +466,6 @@ func TestPublisherRunner_Run__Response_To_Wait__Right_After_Wait_Request(t *test
 	resp := <-waitRespChan
 	assert.Equal(t, uint64(21), resp)
 
-	assert.Equal(t, uint64(21), r.lastSequence)
-	assert.False(t, r.isFetching())
+	assert.Equal(t, uint64(21), p.runner.lastSequence)
+	assert.False(t, p.runner.isFetching())
 }

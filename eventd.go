@@ -20,7 +20,7 @@ type Event struct {
 	CreatedAt time.Time
 }
 
-//go:generate mockgen -destination=repository_mocks.go -self_package=github.com/QuangTung97/eventd -package=eventd . Repository
+//go:generate moq -out generated_moq_test.go . Repository Publisher
 
 // Repository ...
 type Repository interface {
@@ -35,8 +35,6 @@ type Repository interface {
 
 // PublisherID ...
 type PublisherID uint32
-
-//go:generate mockgen -destination=publisher_mocks.go -self_package=github.com/QuangTung97/eventd -package=eventd . Publisher
 
 // Publisher ...
 type Publisher interface {
