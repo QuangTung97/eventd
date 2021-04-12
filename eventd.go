@@ -2,6 +2,7 @@ package eventd
 
 import (
 	"context"
+	"errors"
 	"go.uber.org/zap"
 	"sync"
 	"time"
@@ -11,6 +12,9 @@ const (
 	// DefaultGetEventsLimit ...
 	DefaultGetEventsLimit uint64 = 1000
 )
+
+// ErrEventsNotFound when GetEventsFrom returns empty, indicating some events are missing
+var ErrEventsNotFound = errors.New("events not found")
 
 // Event ...
 type Event struct {
@@ -26,6 +30,7 @@ type Event struct {
 type Repository interface {
 	GetLastEvents(ctx context.Context, limit uint64) ([]Event, error)
 	GetUnprocessedEvents(ctx context.Context, limit uint64) ([]Event, error)
+	GetEventsFrom(ctx context.Context, from uint64, limit uint64) ([]Event, error)
 
 	UpdateSequences(ctx context.Context, events []Event) error
 

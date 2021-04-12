@@ -235,8 +235,7 @@ func TestPublisherRunner_Fetch(t *testing.T) {
 	assert.True(t, p.runner.isFetching())
 }
 
-func TestPublisherRunner_Run__Processor_Response_Existed_Not_True(t *testing.T) {
-	// TODO
+func TestPublisherRunner_Run__Processor_Response_Not_Existed__GetEventsFrom_Error(t *testing.T) {
 	fetchChan := make(chan fetchRequest, 1)
 	p := newPublisherTest(5, fetchChan, publisherOpts{
 		waitListLimit: 3,
@@ -250,30 +249,145 @@ func TestPublisherRunner_Run__Processor_Response_Existed_Not_True(t *testing.T) 
 
 	req := <-fetchChan
 	req.responseChan <- fetchResponse{
-		existed: true,
-		result: []Event{
-			{ID: 5, Sequence: 20},
-			{ID: 3, Sequence: 21},
-		},
+		existed: false,
 	}
 
-	p.publisher.PublishFunc = func(ctx context.Context, events []Event) error {
-		return errors.New("publish-error")
-	}
-
-	published := []Event{
-		{ID: 5, Sequence: 20},
-		{ID: 3, Sequence: 21},
+	p.repo.GetEventsFromFunc = func(ctx context.Context, from uint64, limit uint64) ([]Event, error) {
+		return nil, errors.New("get-events-from-error")
 	}
 
 	err := p.runner.run(ctx, nil)
 
+	calls := p.repo.GetEventsFromCalls()
+	assert.Equal(t, 1, len(calls))
+	assert.Equal(t, ctx, calls[0].Ctx)
+	assert.Equal(t, uint64(51), calls[0].From)
+	assert.Equal(t, uint64(5), calls[0].Limit)
+
+	assert.Equal(t, errors.New("get-events-from-error"), err)
+}
+
+func TestPublisherRunner_Run__Processor_Response_Not_Existed__GetEventsFrom_Empty(t *testing.T) {
+	fetchChan := make(chan fetchRequest, 1)
+	p := newPublisherTest(5, fetchChan, publisherOpts{
+		waitListLimit: 3,
+		publishLimit:  5,
+	})
+	ctx := newContext()
+
+	p.initWithLastSequence(50)
+
+	p.runner.fetch()
+
+	req := <-fetchChan
+	req.responseChan <- fetchResponse{
+		existed: false,
+	}
+
+	p.repo.GetEventsFromFunc = func(ctx context.Context, from uint64, limit uint64) ([]Event, error) {
+		return nil, nil
+	}
+
+	err := p.runner.run(ctx, nil)
+
+	calls := p.repo.GetEventsFromCalls()
+	assert.Equal(t, 1, len(calls))
+	assert.Equal(t, ctx, calls[0].Ctx)
+	assert.Equal(t, uint64(51), calls[0].From)
+	assert.Equal(t, uint64(5), calls[0].Limit)
+
+	assert.Equal(t, ErrEventsNotFound, err)
+}
+
+func TestPublisherRunner_Run__Processor_Response_Not_Existed__Publish_Error(t *testing.T) {
+	fetchChan := make(chan fetchRequest, 1)
+	p := newPublisherTest(5, fetchChan, publisherOpts{
+		waitListLimit: 3,
+		publishLimit:  5,
+	})
+	ctx := newContext()
+
+	p.initWithLastSequence(50)
+
+	p.runner.fetch()
+
+	req := <-fetchChan
+	req.responseChan <- fetchResponse{
+		existed: false,
+	}
+
+	p.repo.GetEventsFromFunc = func(ctx context.Context, from uint64, limit uint64) ([]Event, error) {
+		return []Event{
+			{ID: 102, Sequence: 51},
+			{ID: 100, Sequence: 52},
+			{ID: 105, Sequence: 53},
+		}, nil
+	}
+	p.publisher.PublishFunc = func(ctx context.Context, events []Event) error {
+		return errors.New("publish-error")
+	}
+
+	err := p.runner.run(ctx, nil)
+
+	assert.Equal(t, 1, len(p.repo.GetEventsFromCalls()))
+
 	calls := p.publisher.PublishCalls()
 	assert.Equal(t, 1, len(calls))
 	assert.Equal(t, ctx, calls[0].Ctx)
-	assert.Equal(t, published, calls[0].Events)
+	assert.Equal(t, []Event{
+		{ID: 102, Sequence: 51},
+		{ID: 100, Sequence: 52},
+		{ID: 105, Sequence: 53},
+	}, calls[0].Events)
 
 	assert.Equal(t, errors.New("publish-error"), err)
+}
+
+func TestPublisherRunner_Run__Processor_Response_Not_Existed__Publish_OK(t *testing.T) {
+	fetchChan := make(chan fetchRequest, 1)
+	p := newPublisherTest(9, fetchChan, publisherOpts{
+		processedListLimit: 4,
+		waitListLimit:      3,
+		publishLimit:       5,
+	})
+	ctx := newContext()
+
+	p.initWithLastSequence(50)
+
+	p.runner.fetch()
+
+	req := <-fetchChan
+	req.responseChan <- fetchResponse{
+		existed: false,
+	}
+
+	p.repo.GetEventsFromFunc = func(ctx context.Context, from uint64, limit uint64) ([]Event, error) {
+		return []Event{
+			{ID: 102, Sequence: 51},
+			{ID: 100, Sequence: 52},
+			{ID: 105, Sequence: 53},
+		}, nil
+	}
+	p.publisher.PublishFunc = func(ctx context.Context, events []Event) error {
+		return nil
+	}
+	p.repo.SaveLastSequenceFunc = func(ctx context.Context, id PublisherID, seq uint64) error {
+		return nil
+	}
+
+	err := p.runner.run(ctx, nil)
+
+	assert.Equal(t, 1, len(p.repo.GetEventsFromCalls()))
+	assert.Equal(t, 1, len(p.publisher.PublishCalls()))
+
+	calls := p.repo.SaveLastSequenceCalls()
+	assert.Equal(t, 1, len(calls))
+	assert.Equal(t, ctx, calls[0].Ctx)
+	assert.Equal(t, PublisherID(9), calls[0].ID)
+	assert.Equal(t, uint64(53), calls[0].Seq)
+
+	assert.Equal(t, nil, err)
+	assert.Equal(t, uint64(53), p.runner.lastSequence)
 }
 
 func TestPublisherRunner_Run__Publish_Error(t *testing.T) {

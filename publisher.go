@@ -148,33 +148,48 @@ func (r *publisherRunner) fetch() {
 	r.fetching = true
 }
 
+func (r *publisherRunner) handleFetchResponse(ctx context.Context, resp fetchResponse) error {
+	r.fetching = false
+
+	events := resp.result
+	if !resp.existed {
+		gotEvents, err := r.repo.GetEventsFrom(ctx, r.lastSequence+1, r.opts.publishLimit)
+		if err != nil {
+			return err
+		}
+		events = gotEvents
+	}
+	if len(events) == 0 {
+		return ErrEventsNotFound
+	}
+
+	err := r.publisher.Publish(ctx, events)
+	if err != nil {
+		return err
+	}
+
+	for _, e := range events {
+		waitRespChan, ok := r.waitList.get(e.ID)
+		if ok {
+			waitRespChan <- e.Sequence
+			r.waitList.delete(e.ID)
+		}
+		r.processedList.put(e.ID, e.Sequence)
+	}
+
+	seq := events[len(events)-1].Sequence
+	err = r.repo.SaveLastSequence(ctx, r.id, seq)
+	if err != nil {
+		return err
+	}
+	r.lastSequence = seq
+	return nil
+}
+
 func (r *publisherRunner) run(ctx context.Context, waitRequestChan <-chan waitRequest) error {
 	select {
 	case resp := <-r.respChan:
-		// TODO when resp existed is false
-		r.fetching = false
-
-		err := r.publisher.Publish(ctx, resp.result)
-		if err != nil {
-			return err
-		}
-
-		for _, e := range resp.result {
-			waitRespChan, ok := r.waitList.get(e.ID)
-			if ok {
-				waitRespChan <- e.Sequence
-				r.waitList.delete(e.ID)
-			}
-			r.processedList.put(e.ID, e.Sequence)
-		}
-
-		seq := resp.result[len(resp.result)-1].Sequence
-		err = r.repo.SaveLastSequence(ctx, r.id, seq)
-		if err != nil {
-			return err
-		}
-		r.lastSequence = seq
-		return nil
+		return r.handleFetchResponse(ctx, resp)
 
 	case waitReq := <-waitRequestChan:
 		seq, ok := r.processedList.get(waitReq.eventID)
