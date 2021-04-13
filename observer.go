@@ -24,7 +24,8 @@ func newObserver(
 	options ...ObserverOption,
 ) *Observer {
 	opts := observerOpts{
-		logger:             func(err error) {},
+		logger: func(err error) {},
+		// TODO Configurable
 		errorSleepDuration: 30 * time.Second,
 	}
 	for _, o := range options {

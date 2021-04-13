@@ -69,6 +69,32 @@ func TestProcessor_Init__Without_Last_Events(t *testing.T) {
 	assert.Equal(t, []Event(nil), p.proc.currentEvents())
 }
 
+func TestProcessor_Init__Second_Times_Without_Events(t *testing.T) {
+	ctx := newContext()
+
+	p := newProcessorTest(defaultRunnerOpts)
+
+	p.repo.GetLastEventsFunc = func(ctx context.Context, limit uint64) ([]Event, error) {
+		return []Event{
+			{ID: 100, Sequence: 20},
+			{ID: 99, Sequence: 21},
+			{ID: 101, Sequence: 22},
+		}, nil
+	}
+
+	_ = p.proc.init(ctx)
+
+	p.repo.GetLastEventsFunc = func(ctx context.Context, limit uint64) ([]Event, error) {
+		return nil, nil
+	}
+	err := p.proc.init(ctx)
+
+	calls := p.repo.GetLastEventsCalls()
+	assert.Equal(t, 2, len(calls))
+	assert.Equal(t, nil, err)
+	assert.Equal(t, []Event(nil), p.proc.currentEvents())
+}
+
 func TestProcessor_Init__With_Last_Events(t *testing.T) {
 	repo := &RepositoryMock{}
 	ctx := context.Background()

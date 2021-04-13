@@ -38,17 +38,18 @@ type processor struct {
 
 func newProcessor(repo Repository, opts runnerOpts) *processor {
 	return &processor{
-		repo:                repo,
-		getLastEventsLimit:  opts.getEventsLimit,
-		retryDuration:       opts.retryDuration,
-		storedEvents:        make([]Event, opts.storedEventSize),
-		lastSequence:        0,
-		beforeFirstSequence: 0,
-		timer:               time.NewTimer(opts.retryDuration),
+		repo:               repo,
+		getLastEventsLimit: opts.getEventsLimit,
+		retryDuration:      opts.retryDuration,
+		storedEvents:       make([]Event, opts.storedEventSize),
 	}
 }
 
 func (p *processor) init(ctx context.Context) error {
+	p.lastSequence = 0
+	p.beforeFirstSequence = 0
+	p.timer = time.NewTimer(p.retryDuration)
+
 	events, err := p.repo.GetLastEvents(ctx, p.getLastEventsLimit)
 	if err != nil {
 		return err
@@ -59,6 +60,7 @@ func (p *processor) init(ctx context.Context) error {
 
 	p.beforeFirstSequence = events[0].Sequence - 1
 	p.storeEvents(events)
+
 	return nil
 }
 
