@@ -136,3 +136,19 @@ func WithErrorSleepDuration(d time.Duration) Option {
 		opts.errorSleepDuration = d
 	}
 }
+
+// OBSERVER OPTIONS
+type observerOpts struct {
+	logger             func(err error)
+	errorSleepDuration time.Duration
+}
+
+// ObserverOption ...
+type ObserverOption func(opts *observerOpts)
+
+// WithObserverLogger ...
+func WithObserverLogger(logger func(err error)) ObserverOption {
+	return func(opts *observerOpts) {
+		opts.logger = logger
+	}
+}
