@@ -217,3 +217,146 @@ func TestRunner_Processor_Run_Error(t *testing.T) {
 
 	assert.Equal(t, 2, len(repo.GetLastEventsCalls()))
 }
+
+func TestRunner_Processor_Signal_Observer_OK(t *testing.T) {
+	repo := &RepositoryMock{}
+	publisher := &PublisherMock{}
+
+	r := New(repo, WithPublisher(100, publisher))
+
+	ctx := context.Background()
+	ctx, cancel := context.WithCancel(ctx)
+
+	repo.GetLastEventsFunc = func(ctx context.Context, limit uint64) ([]Event, error) {
+		return nil, nil
+	}
+	repo.GetLastSequenceFunc = func(ctx context.Context, id PublisherID) (uint64, error) {
+		return 0, nil
+	}
+	repo.GetUnprocessedEventsFunc = func(ctx context.Context, limit uint64) ([]Event, error) {
+		return []Event{
+			{ID: 100},
+			{ID: 99},
+			{ID: 101},
+			{ID: 120},
+			{ID: 130},
+		}, nil
+	}
+	repo.UpdateSequencesFunc = func(ctx context.Context, events []Event) error {
+		return nil
+	}
+	publisher.PublishFunc = func(ctx context.Context, events []Event) error {
+		return nil
+	}
+	repo.SaveLastSequenceFunc = func(ctx context.Context, id PublisherID, seq uint64) error {
+		return nil
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		r.Run(ctx)
+	}()
+
+	r.Signal()
+
+	obs := r.NewObserver(1, 3)
+	events := obs.GetNextEvents(ctx, nil)
+	assert.Equal(t, []Event{
+		{ID: 100, Sequence: 1},
+		{ID: 99, Sequence: 2},
+		{ID: 101, Sequence: 3},
+	}, events)
+
+	time.Sleep(40 * time.Millisecond)
+	cancel()
+	wg.Wait()
+
+	assert.Equal(t, 1, len(repo.GetLastEventsCalls()))
+	assert.Equal(t, 1, len(repo.GetUnprocessedEventsCalls()))
+
+	publishCalls := publisher.PublishCalls()
+	assert.Equal(t, 1, len(publishCalls))
+	assert.Equal(t, []Event{
+		{ID: 100, Sequence: 1},
+		{ID: 99, Sequence: 2},
+		{ID: 101, Sequence: 3},
+		{ID: 120, Sequence: 4},
+		{ID: 130, Sequence: 5},
+	}, publishCalls[0].Events)
+
+	saveCalls := repo.SaveLastSequenceCalls()
+	assert.Equal(t, 1, len(saveCalls))
+	assert.Equal(t, PublisherID(100), saveCalls[0].ID)
+	assert.Equal(t, uint64(5), saveCalls[0].Seq)
+}
+
+func TestRunner_Processor_Signal_WaitPublishers_OK(t *testing.T) {
+	repo := &RepositoryMock{}
+	publisher := &PublisherMock{}
+
+	r := New(repo, WithPublisher(100, publisher))
+
+	ctx := context.Background()
+	ctx, cancel := context.WithCancel(ctx)
+
+	repo.GetLastEventsFunc = func(ctx context.Context, limit uint64) ([]Event, error) {
+		return nil, nil
+	}
+	repo.GetLastSequenceFunc = func(ctx context.Context, id PublisherID) (uint64, error) {
+		return 0, nil
+	}
+	repo.GetUnprocessedEventsFunc = func(ctx context.Context, limit uint64) ([]Event, error) {
+		return []Event{
+			{ID: 100},
+			{ID: 99},
+			{ID: 101},
+			{ID: 120},
+			{ID: 130},
+		}, nil
+	}
+	repo.UpdateSequencesFunc = func(ctx context.Context, events []Event) error {
+		return nil
+	}
+	publisher.PublishFunc = func(ctx context.Context, events []Event) error {
+		return nil
+	}
+	repo.SaveLastSequenceFunc = func(ctx context.Context, id PublisherID, seq uint64) error {
+		return nil
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		r.Run(ctx)
+	}()
+
+	r.Signal()
+
+	seq := r.WaitPublishers(ctx, 120, 100)
+	assert.Equal(t, uint64(4), seq)
+
+	time.Sleep(40 * time.Millisecond)
+	cancel()
+	wg.Wait()
+
+	assert.Equal(t, 1, len(repo.GetLastEventsCalls()))
+	assert.Equal(t, 1, len(repo.GetUnprocessedEventsCalls()))
+
+	publishCalls := publisher.PublishCalls()
+	assert.Equal(t, 1, len(publishCalls))
+	assert.Equal(t, []Event{
+		{ID: 100, Sequence: 1},
+		{ID: 99, Sequence: 2},
+		{ID: 101, Sequence: 3},
+		{ID: 120, Sequence: 4},
+		{ID: 130, Sequence: 5},
+	}, publishCalls[0].Events)
+
+	saveCalls := repo.SaveLastSequenceCalls()
+	assert.Equal(t, 1, len(saveCalls))
+	assert.Equal(t, PublisherID(100), saveCalls[0].ID)
+	assert.Equal(t, uint64(5), saveCalls[0].Seq)
+}
