@@ -8,7 +8,7 @@ import (
 )
 
 func TestPublisherOptions(t *testing.T) {
-	options := defaultPublisherOptions
+	options := defaultPublisherOptions()
 	expected := publisherOpts{
 		processedListLimit: DefaultGetEventsLimit,
 		waitListLimit:      DefaultGetEventsLimit,
@@ -29,7 +29,7 @@ func TestPublisherOptions(t *testing.T) {
 }
 
 func TestRunnerOptions(t *testing.T) {
-	options := defaultRunnerOpts
+	options := defaultRunnerOpts()
 	expected := runnerOpts{
 		getEventsLimit:     DefaultGetEventsLimit,
 		retryDuration:      60 * time.Second,

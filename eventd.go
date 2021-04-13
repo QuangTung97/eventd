@@ -170,7 +170,6 @@ OuterLoop:
 			}()
 		}
 
-		<-runningCtx.Done()
 		wg.Wait()
 
 		if ctx.Err() != nil {

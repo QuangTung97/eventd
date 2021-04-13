@@ -37,7 +37,7 @@ func newProcessorTestWithEvents(opts runnerOpts, events []Event) *processorTest 
 
 func TestProcessor_Init__GetLastEvents_Error(t *testing.T) {
 	ctx := newContext()
-	p := newProcessorTest(defaultRunnerOpts)
+	p := newProcessorTest(defaultRunnerOpts())
 
 	p.repo.GetLastEventsFunc = func(ctx context.Context, limit uint64) ([]Event, error) {
 		return nil, errors.New("get-last-events-error")
@@ -55,7 +55,7 @@ func TestProcessor_Init__GetLastEvents_Error(t *testing.T) {
 func TestProcessor_Init__Without_Last_Events(t *testing.T) {
 	ctx := newContext()
 
-	p := newProcessorTest(defaultRunnerOpts)
+	p := newProcessorTest(defaultRunnerOpts())
 
 	p.repo.GetLastEventsFunc = func(ctx context.Context, limit uint64) ([]Event, error) {
 		return nil, nil
@@ -72,7 +72,7 @@ func TestProcessor_Init__Without_Last_Events(t *testing.T) {
 func TestProcessor_Init__Second_Times_Without_Events(t *testing.T) {
 	ctx := newContext()
 
-	p := newProcessorTest(defaultRunnerOpts)
+	p := newProcessorTest(defaultRunnerOpts())
 
 	p.repo.GetLastEventsFunc = func(ctx context.Context, limit uint64) ([]Event, error) {
 		return []Event{
@@ -108,7 +108,7 @@ func TestProcessor_Init__With_Last_Events(t *testing.T) {
 		return events, nil
 	}
 
-	p := newProcessor(repo, defaultRunnerOpts)
+	p := newProcessor(repo, defaultRunnerOpts())
 	err := p.init(ctx)
 
 	assert.Equal(t, nil, err)

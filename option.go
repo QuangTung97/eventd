@@ -21,14 +21,16 @@ type registeredPublisher struct {
 // PublisherOption ...
 type PublisherOption func(opts *publisherOpts)
 
-var defaultPublisherOptions = publisherOpts{
-	processedListLimit: DefaultGetEventsLimit,
-	waitListLimit:      DefaultGetEventsLimit,
-	publishLimit:       DefaultGetEventsLimit,
+func defaultPublisherOptions() publisherOpts {
+	return publisherOpts{
+		processedListLimit: DefaultGetEventsLimit,
+		waitListLimit:      DefaultGetEventsLimit,
+		publishLimit:       DefaultGetEventsLimit,
+	}
 }
 
 func computePublisherOpts(options ...PublisherOption) publisherOpts {
-	result := defaultPublisherOptions
+	result := defaultPublisherOptions()
 	for _, o := range options {
 		o(&result)
 	}
@@ -70,17 +72,19 @@ type runnerOpts struct {
 // Option ...
 type Option func(opts *runnerOpts)
 
-var defaultRunnerOpts = runnerOpts{
-	getEventsLimit:     DefaultGetEventsLimit,
-	retryDuration:      60 * time.Second,
-	storedEventSize:    DefaultGetEventsLimit,
-	errorSleepDuration: 30 * time.Second,
-	publishers:         map[PublisherID]registeredPublisher{},
-	logger:             zap.NewNop(),
+func defaultRunnerOpts() runnerOpts {
+	return runnerOpts{
+		getEventsLimit:     DefaultGetEventsLimit,
+		retryDuration:      60 * time.Second,
+		storedEventSize:    DefaultGetEventsLimit,
+		errorSleepDuration: 30 * time.Second,
+		publishers:         map[PublisherID]registeredPublisher{},
+		logger:             zap.NewNop(),
+	}
 }
 
 func computeRunnerOpts(options ...Option) runnerOpts {
-	result := defaultRunnerOpts
+	result := defaultRunnerOpts()
 	for _, o := range options {
 		o(&result)
 	}

@@ -40,6 +40,82 @@ func TestRunner__GetLastEvents_Error(t *testing.T) {
 	assert.Equal(t, uint64(1000), calls[0].Limit)
 }
 
+func TestRunner__GetLastEvents_Error__With_Publisher(t *testing.T) {
+	repo := &RepositoryMock{}
+	publisher := &PublisherMock{}
+
+	r := New(repo, WithErrorSleepDuration(30*time.Millisecond),
+		WithPublisher(100, publisher),
+	)
+
+	ctx := context.Background()
+	ctx, cancel := context.WithCancel(ctx)
+
+	repo.GetLastSequenceFunc = func(ctx context.Context, id PublisherID) (uint64, error) {
+		return 0, nil
+	}
+
+	repo.GetLastEventsFunc = func(ctx context.Context, limit uint64) ([]Event, error) {
+		if len(repo.GetLastEventsCalls()) == 1 {
+			return nil, errors.New("get-last-events-error")
+		}
+		return nil, nil
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		r.Run(ctx)
+	}()
+
+	time.Sleep(50 * time.Millisecond)
+	cancel()
+	wg.Wait()
+
+	assert.Equal(t, 2, len(repo.GetLastEventsCalls()))
+	calls := repo.GetLastSequenceCalls()
+	assert.Equal(t, 1, len(calls))
+}
+
+func TestRunner__GetLastSequence_Error(t *testing.T) {
+	repo := &RepositoryMock{}
+	publisher := &PublisherMock{}
+
+	r := New(repo, WithErrorSleepDuration(30*time.Millisecond),
+		WithPublisher(100, publisher),
+	)
+
+	ctx := context.Background()
+	ctx, cancel := context.WithCancel(ctx)
+
+	repo.GetLastSequenceFunc = func(ctx context.Context, id PublisherID) (uint64, error) {
+		if len(repo.GetLastSequenceCalls()) == 1 {
+			return 0, errors.New("get-last-seq-error")
+		}
+		return 0, nil
+	}
+
+	repo.GetLastEventsFunc = func(ctx context.Context, limit uint64) ([]Event, error) {
+		return nil, nil
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		r.Run(ctx)
+	}()
+
+	time.Sleep(50 * time.Millisecond)
+	cancel()
+	wg.Wait()
+
+	assert.Equal(t, 2, len(repo.GetLastEventsCalls()))
+	calls := repo.GetLastSequenceCalls()
+	assert.Equal(t, 2, len(calls))
+}
+
 func TestRunner__GetLastEvents_Error_Context_Cancelled(t *testing.T) {
 	repo := &RepositoryMock{}
 	r := New(repo, WithErrorSleepDuration(30*time.Millisecond))
