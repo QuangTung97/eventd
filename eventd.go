@@ -75,13 +75,14 @@ func New(repo Repository, options ...Option) *Runner {
 	signalChan := make(chan struct{}, DefaultGetEventsLimit)
 	// TODO fetchRequestChan cap
 	fetchChan := make(chan fetchRequest, DefaultGetEventsLimit)
+	waitRequestChan := make(chan waitRequest, DefaultGetEventsLimit)
 
 	publishers := map[PublisherID]*publisherRunner{}
 	for id, publisherConf := range opts.publishers {
 		conf := publisherConf
 
 		publisher := newPublisherRunner(id, repo,
-			conf.publisher, fetchChan, conf.options)
+			conf.publisher, fetchChan, waitRequestChan, conf.options)
 		publishers[id] = publisher
 	}
 
@@ -145,9 +146,8 @@ OuterLoop:
 			}
 		}()
 
-		for id, p := range r.publishers {
+		for _, p := range r.publishers {
 			publisher := p
-			waitRequestChan := r.options.publishers[id].waitRequestChan
 
 			go func() {
 				defer wg.Done()
@@ -157,7 +157,7 @@ OuterLoop:
 						publisher.fetch()
 					}
 
-					err := publisher.run(runningCtx, waitRequestChan)
+					err := publisher.run(runningCtx)
 					if runningCtx.Err() != nil {
 						return
 					}

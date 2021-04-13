@@ -47,9 +47,8 @@ func TestRunnerOptions(t *testing.T) {
 	assert.Same(t, logger, options.logger)
 
 	publisher := &PublisherMock{}
-	waitChan := make(chan waitRequest)
 
-	WithPublisher(100, publisher, waitChan, WithProcessedListLimit(70))(&options)
+	WithPublisher(100, publisher, WithProcessedListLimit(70))(&options)
 	assert.Equal(t, 1, len(options.publishers))
 
 	expectedPublisherOpts := publisherOpts{
@@ -65,7 +64,6 @@ func TestComputeRunnerOptions(t *testing.T) {
 	assert.Nil(t, err)
 
 	publisher := &PublisherMock{}
-	waitChan := make(chan waitRequest)
 
 	options := computeRunnerOpts(
 		WithLogger(logger),
@@ -73,7 +71,7 @@ func TestComputeRunnerOptions(t *testing.T) {
 		WithRetryDuration(25*time.Second),
 		WithStoredEventsSize(66),
 		WithErrorSleepDuration(20*time.Second),
-		WithPublisher(100, publisher, waitChan,
+		WithPublisher(100, publisher,
 			WithProcessedListLimit(70),
 		),
 	)

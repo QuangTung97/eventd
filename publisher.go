@@ -89,13 +89,15 @@ type waitRequest struct {
 
 type publisherRunner struct {
 	id        PublisherID
+	opts      publisherOpts
 	repo      Repository
 	publisher Publisher
-	fetchChan chan<- fetchRequest
-	respChan  chan fetchResponse
-	opts      publisherOpts
 
-	events []Event
+	fetchChan       chan<- fetchRequest
+	waitRequestChan <-chan waitRequest
+
+	respChan chan fetchResponse
+	events   []Event
 
 	lastSequence uint64
 	fetching     bool
@@ -106,26 +108,30 @@ type publisherRunner struct {
 
 func newPublisherRunner(
 	id PublisherID, repo Repository, publisher Publisher,
-	fetchChan chan<- fetchRequest, opts publisherOpts,
+	fetchChan chan<- fetchRequest,
+	waitRequestChan <-chan waitRequest,
+	opts publisherOpts,
 ) *publisherRunner {
 	return &publisherRunner{
 		id:        id,
+		opts:      opts,
 		repo:      repo,
 		publisher: publisher,
-		fetchChan: fetchChan,
-		respChan:  make(chan fetchResponse, 1),
-		opts:      opts,
-		events:    make([]Event, 0, opts.publishLimit),
 
-		lastSequence: 0,
-		fetching:     false,
+		fetchChan:       fetchChan,
+		waitRequestChan: waitRequestChan,
 
-		processedList: newPublisherProcessedList(opts.processedListLimit),
-		waitList:      newPublisherWaitList(opts.waitListLimit),
+		respChan: make(chan fetchResponse, 1),
+		events:   make([]Event, 0, opts.publishLimit),
 	}
 }
 
 func (r *publisherRunner) init(ctx context.Context) error {
+	r.lastSequence = 0
+	r.fetching = false
+	r.processedList = newPublisherProcessedList(r.opts.processedListLimit)
+	r.waitList = newPublisherWaitList(r.opts.waitListLimit)
+
 	seq, err := r.repo.GetLastSequence(ctx, r.id)
 	if err != nil {
 		return err
@@ -186,12 +192,12 @@ func (r *publisherRunner) handleFetchResponse(ctx context.Context, resp fetchRes
 	return nil
 }
 
-func (r *publisherRunner) run(ctx context.Context, waitRequestChan <-chan waitRequest) error {
+func (r *publisherRunner) run(ctx context.Context) error {
 	select {
 	case resp := <-r.respChan:
 		return r.handleFetchResponse(ctx, resp)
 
-	case waitReq := <-waitRequestChan:
+	case waitReq := <-r.waitRequestChan:
 		seq, ok := r.processedList.get(waitReq.eventID)
 		if ok {
 			waitReq.responseChan <- seq

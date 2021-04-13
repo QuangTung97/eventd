@@ -154,12 +154,14 @@ type publisherTest struct {
 	runner    *publisherRunner
 }
 
-func newPublisherTest(id PublisherID, fetchChan chan<- fetchRequest,
+func newPublisherTest(id PublisherID,
+	fetchChan chan<- fetchRequest,
+	waitChan <-chan waitRequest,
 	options publisherOpts,
 ) *publisherTest {
 	repo := &RepositoryMock{}
 	publisher := &PublisherMock{}
-	runner := newPublisherRunner(id, repo, publisher, fetchChan, options)
+	runner := newPublisherRunner(id, repo, publisher, fetchChan, waitChan, options)
 	return &publisherTest{
 		repo:      repo,
 		publisher: publisher,
@@ -189,7 +191,7 @@ func newContext() context.Context {
 
 func TestPublisherRunner_Init_Error(t *testing.T) {
 	ctx := newContext()
-	p := newPublisherTest(5, nil, publisherOpts{
+	p := newPublisherTest(5, nil, nil, publisherOpts{
 		waitListLimit: 3,
 	})
 
@@ -210,7 +212,7 @@ func TestPublisherRunner_Init_Error(t *testing.T) {
 
 func TestPublisherRunner_Fetch(t *testing.T) {
 	fetchChan := make(chan fetchRequest, 1)
-	p := newPublisherTest(5, fetchChan, publisherOpts{
+	p := newPublisherTest(5, fetchChan, nil, publisherOpts{
 		waitListLimit: 3,
 		publishLimit:  5,
 	})
@@ -237,7 +239,7 @@ func TestPublisherRunner_Fetch(t *testing.T) {
 
 func TestPublisherRunner_Run__Processor_Response_Not_Existed__GetEventsFrom_Error(t *testing.T) {
 	fetchChan := make(chan fetchRequest, 1)
-	p := newPublisherTest(5, fetchChan, publisherOpts{
+	p := newPublisherTest(5, fetchChan, nil, publisherOpts{
 		waitListLimit: 3,
 		publishLimit:  5,
 	})
@@ -256,7 +258,7 @@ func TestPublisherRunner_Run__Processor_Response_Not_Existed__GetEventsFrom_Erro
 		return nil, errors.New("get-events-from-error")
 	}
 
-	err := p.runner.run(ctx, nil)
+	err := p.runner.run(ctx)
 
 	calls := p.repo.GetEventsFromCalls()
 	assert.Equal(t, 1, len(calls))
@@ -269,7 +271,7 @@ func TestPublisherRunner_Run__Processor_Response_Not_Existed__GetEventsFrom_Erro
 
 func TestPublisherRunner_Run__Processor_Response_Not_Existed__GetEventsFrom_Empty(t *testing.T) {
 	fetchChan := make(chan fetchRequest, 1)
-	p := newPublisherTest(5, fetchChan, publisherOpts{
+	p := newPublisherTest(5, fetchChan, nil, publisherOpts{
 		waitListLimit: 3,
 		publishLimit:  5,
 	})
@@ -288,7 +290,7 @@ func TestPublisherRunner_Run__Processor_Response_Not_Existed__GetEventsFrom_Empt
 		return nil, nil
 	}
 
-	err := p.runner.run(ctx, nil)
+	err := p.runner.run(ctx)
 
 	calls := p.repo.GetEventsFromCalls()
 	assert.Equal(t, 1, len(calls))
@@ -301,7 +303,7 @@ func TestPublisherRunner_Run__Processor_Response_Not_Existed__GetEventsFrom_Empt
 
 func TestPublisherRunner_Run__Processor_Response_Not_Existed__Publish_Error(t *testing.T) {
 	fetchChan := make(chan fetchRequest, 1)
-	p := newPublisherTest(5, fetchChan, publisherOpts{
+	p := newPublisherTest(5, fetchChan, nil, publisherOpts{
 		waitListLimit: 3,
 		publishLimit:  5,
 	})
@@ -327,7 +329,7 @@ func TestPublisherRunner_Run__Processor_Response_Not_Existed__Publish_Error(t *t
 		return errors.New("publish-error")
 	}
 
-	err := p.runner.run(ctx, nil)
+	err := p.runner.run(ctx)
 
 	assert.Equal(t, 1, len(p.repo.GetEventsFromCalls()))
 
@@ -345,7 +347,7 @@ func TestPublisherRunner_Run__Processor_Response_Not_Existed__Publish_Error(t *t
 
 func TestPublisherRunner_Run__Processor_Response_Not_Existed__Publish_OK(t *testing.T) {
 	fetchChan := make(chan fetchRequest, 1)
-	p := newPublisherTest(9, fetchChan, publisherOpts{
+	p := newPublisherTest(9, fetchChan, nil, publisherOpts{
 		processedListLimit: 4,
 		waitListLimit:      3,
 		publishLimit:       5,
@@ -375,7 +377,7 @@ func TestPublisherRunner_Run__Processor_Response_Not_Existed__Publish_OK(t *test
 		return nil
 	}
 
-	err := p.runner.run(ctx, nil)
+	err := p.runner.run(ctx)
 
 	assert.Equal(t, 1, len(p.repo.GetEventsFromCalls()))
 	assert.Equal(t, 1, len(p.publisher.PublishCalls()))
@@ -393,7 +395,7 @@ func TestPublisherRunner_Run__Processor_Response_Not_Existed__Publish_OK(t *test
 func TestPublisherRunner_Run__Publish_Error(t *testing.T) {
 	fetchChan := make(chan fetchRequest, 1)
 	p := newPublisherTest(
-		5, fetchChan,
+		5, fetchChan, nil,
 		publisherOpts{
 			waitListLimit: 3,
 			publishLimit:  5,
@@ -422,7 +424,7 @@ func TestPublisherRunner_Run__Publish_Error(t *testing.T) {
 		{ID: 3, Sequence: 21},
 	}
 
-	err := p.runner.run(ctx, nil)
+	err := p.runner.run(ctx)
 	assert.Equal(t, errors.New("publish-error"), err)
 
 	calls := p.publisher.PublishCalls()
@@ -436,7 +438,7 @@ func TestPublisherRunner_Run__Publish_Error(t *testing.T) {
 func TestPublisherRunner_Run__Save_Last_Seq_Error(t *testing.T) {
 	fetchChan := make(chan fetchRequest, 1)
 	p := newPublisherTest(
-		11, fetchChan,
+		11, fetchChan, nil,
 		publisherOpts{
 			processedListLimit: 4,
 			waitListLimit:      3,
@@ -463,7 +465,7 @@ func TestPublisherRunner_Run__Save_Last_Seq_Error(t *testing.T) {
 		return errors.New("save-last-seq-error")
 	}
 
-	err := p.runner.run(ctx, nil)
+	err := p.runner.run(ctx)
 
 	calls := p.repo.SaveLastSequenceCalls()
 	assert.Equal(t, 1, len(calls))
@@ -477,7 +479,7 @@ func TestPublisherRunner_Run__Save_Last_Seq_Error(t *testing.T) {
 func TestPublisherRunner_Run__Context_Cancelled(t *testing.T) {
 	fetchChan := make(chan fetchRequest, 1)
 	p := newPublisherTest(
-		11, fetchChan,
+		11, fetchChan, nil,
 		publisherOpts{
 			waitListLimit: 3,
 			publishLimit:  5,
@@ -490,14 +492,16 @@ func TestPublisherRunner_Run__Context_Cancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(ctx)
 	cancel()
 
-	err := p.runner.run(ctx, nil)
+	err := p.runner.run(ctx)
 	assert.Equal(t, context.Canceled, err)
 }
 
 func TestPublisherRunner_Run__Response_To_Wait__After_Recv_Resp_From_Processor(t *testing.T) {
 	fetchChan := make(chan fetchRequest, 1)
+	waitReqChan := make(chan waitRequest, 1)
+
 	p := newPublisherTest(
-		11, fetchChan,
+		11, fetchChan, waitReqChan,
 		publisherOpts{
 			processedListLimit: 4,
 			waitListLimit:      3,
@@ -510,13 +514,12 @@ func TestPublisherRunner_Run__Response_To_Wait__After_Recv_Resp_From_Processor(t
 	p.runner.fetch()
 
 	waitRespChan := make(chan uint64, 1)
-	waitReqChan := make(chan waitRequest, 1)
 	waitReqChan <- waitRequest{
 		eventID:      3,
 		responseChan: waitRespChan,
 	}
 
-	_ = p.runner.run(ctx, waitReqChan)
+	_ = p.runner.run(ctx)
 
 	req := <-fetchChan
 	req.responseChan <- fetchResponse{
@@ -527,7 +530,7 @@ func TestPublisherRunner_Run__Response_To_Wait__After_Recv_Resp_From_Processor(t
 		},
 	}
 
-	err := p.runner.run(ctx, waitReqChan)
+	err := p.runner.run(ctx)
 
 	assert.Equal(t, nil, err)
 	assert.Equal(t, 0, len(waitReqChan))
@@ -541,8 +544,10 @@ func TestPublisherRunner_Run__Response_To_Wait__After_Recv_Resp_From_Processor(t
 
 func TestPublisherRunner_Run__Response_To_Wait__Right_After_Wait_Request(t *testing.T) {
 	fetchChan := make(chan fetchRequest, 1)
+	waitReqChan := make(chan waitRequest, 1)
+
 	p := newPublisherTest(
-		11, fetchChan,
+		11, fetchChan, waitReqChan,
 		publisherOpts{
 			processedListLimit: 4,
 			waitListLimit:      3,
@@ -563,16 +568,15 @@ func TestPublisherRunner_Run__Response_To_Wait__Right_After_Wait_Request(t *test
 		},
 	}
 
-	err := p.runner.run(ctx, nil)
+	err := p.runner.run(ctx)
 
 	waitRespChan := make(chan uint64, 1)
-	waitReqChan := make(chan waitRequest, 1)
 	waitReqChan <- waitRequest{
 		eventID:      3,
 		responseChan: waitRespChan,
 	}
 
-	_ = p.runner.run(ctx, waitReqChan)
+	_ = p.runner.run(ctx)
 
 	assert.Equal(t, nil, err)
 	assert.Equal(t, 0, len(waitReqChan))

@@ -14,9 +14,8 @@ type publisherOpts struct {
 }
 
 type registeredPublisher struct {
-	options         publisherOpts
-	publisher       Publisher
-	waitRequestChan <-chan waitRequest
+	options   publisherOpts
+	publisher Publisher
 }
 
 // PublisherOption ...
@@ -91,13 +90,12 @@ func computeRunnerOpts(options ...Option) runnerOpts {
 // WithPublisher ...
 func WithPublisher(
 	id PublisherID, publisher Publisher,
-	waitRequestChan <-chan waitRequest, options ...PublisherOption,
+	options ...PublisherOption,
 ) Option {
 	return func(opts *runnerOpts) {
 		opts.publishers[id] = registeredPublisher{
-			publisher:       publisher,
-			options:         computePublisherOpts(options...),
-			waitRequestChan: waitRequestChan,
+			publisher: publisher,
+			options:   computePublisherOpts(options...),
 		}
 	}
 }
