@@ -169,7 +169,9 @@ func (r *publisherRunner) handleFetchResponse(ctx context.Context, resp fetchRes
 		return ErrEventsNotFound
 	}
 
-	err := r.publisher.Publish(ctx, events)
+	published := make([]Event, len(events))
+	copy(published, events)
+	err := r.publisher.Publish(ctx, published)
 	if err != nil {
 		return err
 	}
