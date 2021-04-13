@@ -169,7 +169,7 @@ func TestRunner__Processor_Timer_Expired(t *testing.T) {
 		r.Run(ctx)
 	}()
 
-	time.Sleep(40 * time.Millisecond)
+	time.Sleep(30 * time.Millisecond)
 	cancel()
 	wg.Wait()
 

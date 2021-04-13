@@ -156,7 +156,7 @@ type publisherTest struct {
 
 func newPublisherTest(id PublisherID,
 	fetchChan chan<- fetchRequest,
-	waitChan <-chan waitRequest,
+	waitChan chan waitRequest,
 	options publisherOpts,
 ) *publisherTest {
 	repo := &RepositoryMock{}

@@ -187,3 +187,25 @@ func (r *Runner) Signal() {
 func (r *Runner) NewObserver(fromSequence uint64, limit uint64, options ...ObserverOption) *Observer {
 	return newObserver(r.repo, r.fetchChan, fromSequence, limit, options...)
 }
+
+// WaitPublishers ...
+func (r *Runner) WaitPublishers(ctx context.Context, eventID uint64, publisherIDs ...PublisherID) uint64 {
+	waitRespChan := make(chan uint64, len(publisherIDs))
+	var seq uint64
+	for _, publisherID := range publisherIDs {
+		r.publishers[publisherID].waitRequestChan <- waitRequest{
+			eventID:      eventID,
+			responseChan: waitRespChan,
+		}
+	}
+
+	for range publisherIDs {
+		select {
+		case seq = <-waitRespChan:
+			continue
+		case <-ctx.Done():
+			return 0
+		}
+	}
+	return seq
+}

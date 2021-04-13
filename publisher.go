@@ -94,7 +94,7 @@ type publisherRunner struct {
 	publisher Publisher
 
 	fetchChan       chan<- fetchRequest
-	waitRequestChan <-chan waitRequest
+	waitRequestChan chan waitRequest
 
 	respChan chan fetchResponse
 	events   []Event
@@ -109,7 +109,7 @@ type publisherRunner struct {
 func newPublisherRunner(
 	id PublisherID, repo Repository, publisher Publisher,
 	fetchChan chan<- fetchRequest,
-	waitRequestChan <-chan waitRequest,
+	waitRequestChan chan waitRequest,
 	opts publisherOpts,
 ) *publisherRunner {
 	return &publisherRunner{
