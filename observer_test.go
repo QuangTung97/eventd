@@ -8,6 +8,8 @@ import (
 )
 
 func TestObserver_BeforeGetEvents(t *testing.T) {
+	t.Parallel()
+
 	fetchCh := make(chan fetchRequest, 1)
 	o := newObserver(nil, fetchCh, 40, 5)
 
@@ -22,6 +24,8 @@ func TestObserver_BeforeGetEvents(t *testing.T) {
 }
 
 func TestObserver_WaitForEvents_Existed(t *testing.T) {
+	t.Parallel()
+
 	fetchCh := make(chan fetchRequest, 1)
 	repo := &RepositoryMock{}
 	o := newObserver(repo, fetchCh, 40, 5)
@@ -56,6 +60,8 @@ func TestObserver_WaitForEvents_Existed(t *testing.T) {
 }
 
 func TestObserver_WaitForEvents__Context_Cancelled(t *testing.T) {
+	t.Parallel()
+
 	fetchCh := make(chan fetchRequest, 1)
 	repo := &RepositoryMock{}
 	o := newObserver(repo, fetchCh, 40, 5)
@@ -75,6 +81,8 @@ func TestObserver_WaitForEvents__Context_Cancelled(t *testing.T) {
 }
 
 func TestObserver_WaitForEvents_Not_Existed__GetEventsFrom_Error(t *testing.T) {
+	t.Parallel()
+
 	fetchCh := make(chan fetchRequest, 1)
 	repo := &RepositoryMock{}
 
@@ -112,6 +120,8 @@ func TestObserver_WaitForEvents_Not_Existed__GetEventsFrom_Error(t *testing.T) {
 }
 
 func TestObserver_WaitForEvents_Not_Existed__GetEventsFrom_OK(t *testing.T) {
+	t.Parallel()
+
 	fetchCh := make(chan fetchRequest, 1)
 	repo := &RepositoryMock{}
 	o := newObserver(repo, fetchCh, 40, 5)
@@ -152,6 +162,8 @@ func TestObserver_WaitForEvents_Not_Existed__GetEventsFrom_OK(t *testing.T) {
 }
 
 func TestObserver_BeforeGetEvents__Second_Times__OK(t *testing.T) {
+	t.Parallel()
+
 	fetchCh := make(chan fetchRequest, 1)
 	repo := &RepositoryMock{}
 	o := newObserver(repo, fetchCh, 40, 5)

@@ -10,6 +10,8 @@ import (
 // PUBLISHER WAIT LIST
 
 func TestPublisherWaitList_Single(t *testing.T) {
+	t.Parallel()
+
 	wl := newPublisherWaitList(1)
 	var expected chan<- uint64
 
@@ -24,6 +26,8 @@ func TestPublisherWaitList_Single(t *testing.T) {
 }
 
 func TestPublisherWaitList_Double(t *testing.T) {
+	t.Parallel()
+
 	wl := newPublisherWaitList(2)
 	var expected chan<- uint64
 
@@ -49,6 +53,8 @@ func TestPublisherWaitList_Double(t *testing.T) {
 }
 
 func TestPublisherWaitList_Exceeded(t *testing.T) {
+	t.Parallel()
+
 	wl := newPublisherWaitList(2)
 	var expected chan<- uint64
 
@@ -71,6 +77,8 @@ func TestPublisherWaitList_Exceeded(t *testing.T) {
 }
 
 func TestPublisherWaitList_Delete(t *testing.T) {
+	t.Parallel()
+
 	wl := newPublisherWaitList(2)
 	var expected chan<- uint64
 
@@ -102,6 +110,8 @@ func TestPublisherWaitList_Delete(t *testing.T) {
 
 // PUBLISHER PROCESSED LIST
 func TestPublisherProcessedList_Single(t *testing.T) {
+	t.Parallel()
+
 	wl := newPublisherProcessedList(1)
 	wl.put(20, 100)
 
@@ -112,6 +122,8 @@ func TestPublisherProcessedList_Single(t *testing.T) {
 }
 
 func TestPublisherProcessedList_Double(t *testing.T) {
+	t.Parallel()
+
 	wl := newPublisherProcessedList(2)
 
 	wl.put(20, 100)
@@ -131,6 +143,8 @@ func TestPublisherProcessedList_Double(t *testing.T) {
 }
 
 func TestPublisherProcessedList_Exceeded(t *testing.T) {
+	t.Parallel()
+
 	wl := newPublisherProcessedList(2)
 
 	wl.put(20, 100)
@@ -190,6 +204,8 @@ func newContext() context.Context {
 }
 
 func TestPublisherRunner_Init_Error(t *testing.T) {
+	t.Parallel()
+
 	ctx := newContext()
 	p := newPublisherTest(5, nil, nil, publisherOpts{
 		waitListLimit: 3,
@@ -211,6 +227,8 @@ func TestPublisherRunner_Init_Error(t *testing.T) {
 }
 
 func TestPublisherRunner_Fetch(t *testing.T) {
+	t.Parallel()
+
 	fetchChan := make(chan fetchRequest, 1)
 	p := newPublisherTest(5, fetchChan, nil, publisherOpts{
 		waitListLimit: 3,
@@ -238,6 +256,8 @@ func TestPublisherRunner_Fetch(t *testing.T) {
 }
 
 func TestPublisherRunner_Run__Processor_Response_Not_Existed__GetEventsFrom_Error(t *testing.T) {
+	t.Parallel()
+
 	fetchChan := make(chan fetchRequest, 1)
 	p := newPublisherTest(5, fetchChan, nil, publisherOpts{
 		waitListLimit: 3,
@@ -270,6 +290,8 @@ func TestPublisherRunner_Run__Processor_Response_Not_Existed__GetEventsFrom_Erro
 }
 
 func TestPublisherRunner_Run__Processor_Response_Not_Existed__GetEventsFrom_Empty(t *testing.T) {
+	t.Parallel()
+
 	fetchChan := make(chan fetchRequest, 1)
 	p := newPublisherTest(5, fetchChan, nil, publisherOpts{
 		waitListLimit: 3,
@@ -302,6 +324,8 @@ func TestPublisherRunner_Run__Processor_Response_Not_Existed__GetEventsFrom_Empt
 }
 
 func TestPublisherRunner_Run__Processor_Response_Not_Existed__Publish_Error(t *testing.T) {
+	t.Parallel()
+
 	fetchChan := make(chan fetchRequest, 1)
 	p := newPublisherTest(5, fetchChan, nil, publisherOpts{
 		waitListLimit: 3,
@@ -346,6 +370,8 @@ func TestPublisherRunner_Run__Processor_Response_Not_Existed__Publish_Error(t *t
 }
 
 func TestPublisherRunner_Run__Processor_Response_Not_Existed__Publish_OK(t *testing.T) {
+	t.Parallel()
+
 	fetchChan := make(chan fetchRequest, 1)
 	p := newPublisherTest(9, fetchChan, nil, publisherOpts{
 		processedListLimit: 4,
@@ -393,6 +419,8 @@ func TestPublisherRunner_Run__Processor_Response_Not_Existed__Publish_OK(t *test
 }
 
 func TestPublisherRunner_Run__Publish_Error(t *testing.T) {
+	t.Parallel()
+
 	fetchChan := make(chan fetchRequest, 1)
 	p := newPublisherTest(
 		5, fetchChan, nil,
@@ -436,6 +464,8 @@ func TestPublisherRunner_Run__Publish_Error(t *testing.T) {
 }
 
 func TestPublisherRunner_Run__Save_Last_Seq_Error(t *testing.T) {
+	t.Parallel()
+
 	fetchChan := make(chan fetchRequest, 1)
 	p := newPublisherTest(
 		11, fetchChan, nil,
@@ -477,6 +507,8 @@ func TestPublisherRunner_Run__Save_Last_Seq_Error(t *testing.T) {
 }
 
 func TestPublisherRunner_Run__Context_Cancelled(t *testing.T) {
+	t.Parallel()
+
 	fetchChan := make(chan fetchRequest, 1)
 	p := newPublisherTest(
 		11, fetchChan, nil,
@@ -497,6 +529,8 @@ func TestPublisherRunner_Run__Context_Cancelled(t *testing.T) {
 }
 
 func TestPublisherRunner_Run__Response_To_Wait__After_Recv_Resp_From_Processor(t *testing.T) {
+	t.Parallel()
+
 	fetchChan := make(chan fetchRequest, 1)
 	waitReqChan := make(chan waitRequest, 1)
 
@@ -543,6 +577,8 @@ func TestPublisherRunner_Run__Response_To_Wait__After_Recv_Resp_From_Processor(t
 }
 
 func TestPublisherRunner_Run__Response_To_Wait__Right_After_Wait_Request(t *testing.T) {
+	t.Parallel()
+
 	fetchChan := make(chan fetchRequest, 1)
 	waitReqChan := make(chan waitRequest, 1)
 

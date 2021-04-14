@@ -8,6 +8,8 @@ import (
 )
 
 func TestPublisherOptions(t *testing.T) {
+	t.Parallel()
+
 	options := defaultPublisherOptions()
 	expected := publisherOpts{
 		processedListLimit: DefaultGetEventsLimit,
@@ -29,6 +31,8 @@ func TestPublisherOptions(t *testing.T) {
 }
 
 func TestRunnerOptions(t *testing.T) {
+	t.Parallel()
+
 	options := defaultRunnerOpts()
 	expected := runnerOpts{
 		getEventsLimit:     DefaultGetEventsLimit,
@@ -60,6 +64,8 @@ func TestRunnerOptions(t *testing.T) {
 }
 
 func TestComputeRunnerOptions(t *testing.T) {
+	t.Parallel()
+
 	logger, err := zap.NewProduction()
 	assert.Nil(t, err)
 

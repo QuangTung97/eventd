@@ -10,6 +10,8 @@ import (
 )
 
 func TestRunner__GetLastEvents_Error(t *testing.T) {
+	t.Parallel()
+
 	repo := &RepositoryMock{}
 	r := New(repo, WithErrorSleepDuration(30*time.Millisecond))
 
@@ -41,6 +43,8 @@ func TestRunner__GetLastEvents_Error(t *testing.T) {
 }
 
 func TestRunner__GetLastEvents_Error__With_Publisher(t *testing.T) {
+	t.Parallel()
+
 	repo := &RepositoryMock{}
 	publisher := &PublisherMock{}
 
@@ -79,6 +83,8 @@ func TestRunner__GetLastEvents_Error__With_Publisher(t *testing.T) {
 }
 
 func TestRunner__GetLastSequence_Error(t *testing.T) {
+	t.Parallel()
+
 	repo := &RepositoryMock{}
 	publisher := &PublisherMock{}
 
@@ -117,6 +123,8 @@ func TestRunner__GetLastSequence_Error(t *testing.T) {
 }
 
 func TestRunner__GetLastEvents_Error_Context_Cancelled(t *testing.T) {
+	t.Parallel()
+
 	repo := &RepositoryMock{}
 	r := New(repo, WithErrorSleepDuration(30*time.Millisecond))
 
@@ -149,6 +157,8 @@ func TestRunner__GetLastEvents_Error_Context_Cancelled(t *testing.T) {
 }
 
 func TestRunner__Processor_Timer_Expired(t *testing.T) {
+	t.Parallel()
+
 	repo := &RepositoryMock{}
 	r := New(repo, WithRetryDuration(20*time.Millisecond))
 
@@ -178,6 +188,8 @@ func TestRunner__Processor_Timer_Expired(t *testing.T) {
 }
 
 func TestRunner_Processor_Run_Error(t *testing.T) {
+	t.Parallel()
+
 	repo := &RepositoryMock{}
 	publisher := &PublisherMock{}
 
@@ -219,6 +231,8 @@ func TestRunner_Processor_Run_Error(t *testing.T) {
 }
 
 func TestRunner_Processor_Signal_Observer_OK(t *testing.T) {
+	t.Parallel()
+
 	repo := &RepositoryMock{}
 	publisher := &PublisherMock{}
 
@@ -293,6 +307,8 @@ func TestRunner_Processor_Signal_Observer_OK(t *testing.T) {
 }
 
 func TestRunner_Processor_Signal_WaitPublishers_OK(t *testing.T) {
+	t.Parallel()
+
 	repo := &RepositoryMock{}
 	publisher := &PublisherMock{}
 

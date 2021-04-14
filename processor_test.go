@@ -36,6 +36,8 @@ func newProcessorTestWithEvents(opts runnerOpts, events []Event) *processorTest 
 }
 
 func TestProcessor_Init__GetLastEvents_Error(t *testing.T) {
+	t.Parallel()
+
 	ctx := newContext()
 	p := newProcessorTest(defaultRunnerOpts())
 
@@ -53,6 +55,8 @@ func TestProcessor_Init__GetLastEvents_Error(t *testing.T) {
 }
 
 func TestProcessor_Init__Without_Last_Events(t *testing.T) {
+	t.Parallel()
+
 	ctx := newContext()
 
 	p := newProcessorTest(defaultRunnerOpts())
@@ -70,6 +74,8 @@ func TestProcessor_Init__Without_Last_Events(t *testing.T) {
 }
 
 func TestProcessor_Init__Second_Times_Without_Events(t *testing.T) {
+	t.Parallel()
+
 	ctx := newContext()
 
 	p := newProcessorTest(defaultRunnerOpts())
@@ -96,6 +102,8 @@ func TestProcessor_Init__Second_Times_Without_Events(t *testing.T) {
 }
 
 func TestProcessor_Init__With_Last_Events(t *testing.T) {
+	t.Parallel()
+
 	repo := &RepositoryMock{}
 	ctx := context.Background()
 
@@ -116,6 +124,8 @@ func TestProcessor_Init__With_Last_Events(t *testing.T) {
 }
 
 func TestProcessor_Init__With_Last_3_Events__Limit_3(t *testing.T) {
+	t.Parallel()
+
 	repo := &RepositoryMock{}
 	ctx := context.Background()
 
@@ -140,6 +150,8 @@ func TestProcessor_Init__With_Last_3_Events__Limit_3(t *testing.T) {
 }
 
 func TestProcessor_Init__With_Last_3_Events__Limit_2(t *testing.T) {
+	t.Parallel()
+
 	repo := &RepositoryMock{}
 	ctx := context.Background()
 
@@ -163,6 +175,8 @@ func TestProcessor_Init__With_Last_3_Events__Limit_2(t *testing.T) {
 }
 
 func TestProcessor_Signal__GetUnprocessed_Error(t *testing.T) {
+	t.Parallel()
+
 	ctx := newContext()
 
 	p := newProcessorTestWithEvents(runnerOpts{
@@ -185,6 +199,8 @@ func TestProcessor_Signal__GetUnprocessed_Error(t *testing.T) {
 }
 
 func TestProcessor_Signal__Empty_Unprocessed__Without_Stored(t *testing.T) {
+	t.Parallel()
+
 	ctx := newContext()
 	p := newProcessorTestWithEvents(runnerOpts{
 		getEventsLimit:  4,
@@ -201,6 +217,8 @@ func TestProcessor_Signal__Empty_Unprocessed__Without_Stored(t *testing.T) {
 }
 
 func TestProcessor_Signal__Empty_Unprocessed__With_Stored(t *testing.T) {
+	t.Parallel()
+
 	ctx := newContext()
 	events := []Event{
 		{ID: 10, Sequence: 5},
@@ -222,6 +240,8 @@ func TestProcessor_Signal__Empty_Unprocessed__With_Stored(t *testing.T) {
 }
 
 func TestProcessor_Signal__4_Unprocessed__Update_Error(t *testing.T) {
+	t.Parallel()
+
 	ctx := newContext()
 	p := newProcessorTestWithEvents(runnerOpts{
 		getEventsLimit:  4,
@@ -258,6 +278,8 @@ func TestProcessor_Signal__4_Unprocessed__Update_Error(t *testing.T) {
 }
 
 func TestProcessor_Signal__4_Unprocessed__Update_OK(t *testing.T) {
+	t.Parallel()
+
 	ctx := newContext()
 	p := newProcessorTestWithEvents(runnerOpts{
 		getEventsLimit:  4,
@@ -299,6 +321,8 @@ func TestProcessor_Signal__4_Unprocessed__Update_OK(t *testing.T) {
 }
 
 func TestProcessor_Signal__With_Stored__OK(t *testing.T) {
+	t.Parallel()
+
 	ctx := newContext()
 	events := []Event{
 		{ID: 3, Sequence: 5},
@@ -348,6 +372,8 @@ func TestProcessor_Signal__With_Stored__OK(t *testing.T) {
 }
 
 func TestProcessor_Check_From_Sequence(t *testing.T) {
+	t.Parallel()
+
 	events := []Event{
 		{ID: 3, Sequence: 5},
 		{ID: 6, Sequence: 6},
@@ -398,6 +424,8 @@ func TestProcessor_Check_From_Sequence(t *testing.T) {
 }
 
 func TestProcessor_Get_Events_From(t *testing.T) {
+	t.Parallel()
+
 	events := []Event{
 		{ID: 3, Sequence: 5},
 		{ID: 6, Sequence: 6},
@@ -431,6 +459,8 @@ func TestProcessor_Get_Events_From(t *testing.T) {
 }
 
 func TestProcessor_Run_Context_Cancelled(t *testing.T) {
+	t.Parallel()
+
 	p := newProcessorTestWithEvents(runnerOpts{
 		getEventsLimit:  4,
 		storedEventSize: 5,
@@ -445,6 +475,8 @@ func TestProcessor_Run_Context_Cancelled(t *testing.T) {
 }
 
 func TestProcessor_Run_Signal(t *testing.T) {
+	t.Parallel()
+
 	ctx := newContext()
 	events := []Event{
 		{ID: 3, Sequence: 5},
@@ -490,6 +522,8 @@ func TestProcessor_Run_Signal(t *testing.T) {
 }
 
 func TestProcessor_Run_Multiple_Signals(t *testing.T) {
+	t.Parallel()
+
 	ctx := newContext()
 	events := []Event{
 		{ID: 3, Sequence: 5},
@@ -537,6 +571,8 @@ func TestProcessor_Run_Multiple_Signals(t *testing.T) {
 }
 
 func TestProcessor_Run_Fetch__Not_Existed(t *testing.T) {
+	t.Parallel()
+
 	ctx := newContext()
 	events := []Event{
 		{ID: 3, Sequence: 5},
@@ -569,6 +605,8 @@ func TestProcessor_Run_Fetch__Not_Existed(t *testing.T) {
 }
 
 func TestProcessor_Run_Fetch__Existed(t *testing.T) {
+	t.Parallel()
+
 	ctx := newContext()
 	events := []Event{
 		{ID: 3, Sequence: 5},
@@ -605,6 +643,8 @@ func TestProcessor_Run_Fetch__Existed(t *testing.T) {
 }
 
 func TestProcessor_Run_Fetch__Wait(t *testing.T) {
+	t.Parallel()
+
 	ctx := newContext()
 	events := []Event{
 		{ID: 3, Sequence: 5},
@@ -690,6 +730,8 @@ func TestProcessor_Run_Fetch__Wait(t *testing.T) {
 }
 
 func TestProcessor_Run_Fetch__Wait_And_Wait(t *testing.T) {
+	t.Parallel()
+
 	ctx := newContext()
 	events := []Event{
 		{ID: 3, Sequence: 5},
