@@ -48,6 +48,7 @@ func newProcessor(repo Repository, opts runnerOpts) *processor {
 func (p *processor) init(ctx context.Context) error {
 	p.lastSequence = 0
 	p.beforeFirstSequence = 0
+	p.waitList = nil
 	p.timer = time.NewTimer(p.retryDuration)
 
 	events, err := p.repo.GetLastEvents(ctx, p.getLastEventsLimit)
