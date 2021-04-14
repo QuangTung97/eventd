@@ -243,7 +243,7 @@ func TestPublisherRunner_Fetch(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, 1, len(p.repo.GetLastSequenceCalls()))
 
-	p.runner.fetch()
+	p.runner.fetch(newContext())
 
 	assert.Equal(t, 1, len(fetchChan))
 	req := <-fetchChan
@@ -253,6 +253,27 @@ func TestPublisherRunner_Fetch(t *testing.T) {
 	assert.Equal(t, 0, len(req.result))
 	assert.NotNil(t, req.responseChan)
 	assert.True(t, p.runner.isFetching())
+}
+
+func TestPublisherRunner_Fetch__Context_Cancelled(t *testing.T) {
+	t.Parallel()
+
+	fetchChan := make(chan fetchRequest)
+	p := newPublisherTest(5, fetchChan, nil, publisherOpts{
+		waitListLimit: 3,
+		publishLimit:  5,
+	})
+
+	p.initWithLastSequence(50)
+
+	ctx := context.Background()
+	ctx, cancel := context.WithCancel(ctx)
+	cancel()
+
+	p.runner.fetch(ctx)
+
+	assert.Equal(t, 0, len(fetchChan))
+	assert.False(t, p.runner.isFetching())
 }
 
 func TestPublisherRunner_Run__Processor_Response_Not_Existed__GetEventsFrom_Error(t *testing.T) {
@@ -267,7 +288,7 @@ func TestPublisherRunner_Run__Processor_Response_Not_Existed__GetEventsFrom_Erro
 
 	p.initWithLastSequence(50)
 
-	p.runner.fetch()
+	p.runner.fetch(newContext())
 
 	req := <-fetchChan
 	req.responseChan <- fetchResponse{
@@ -301,7 +322,7 @@ func TestPublisherRunner_Run__Processor_Response_Not_Existed__GetEventsFrom_Empt
 
 	p.initWithLastSequence(50)
 
-	p.runner.fetch()
+	p.runner.fetch(newContext())
 
 	req := <-fetchChan
 	req.responseChan <- fetchResponse{
@@ -335,7 +356,7 @@ func TestPublisherRunner_Run__Processor_Response_Not_Existed__Publish_Error(t *t
 
 	p.initWithLastSequence(50)
 
-	p.runner.fetch()
+	p.runner.fetch(newContext())
 
 	req := <-fetchChan
 	req.responseChan <- fetchResponse{
@@ -382,7 +403,7 @@ func TestPublisherRunner_Run__Processor_Response_Not_Existed__Publish_OK(t *test
 
 	p.initWithLastSequence(50)
 
-	p.runner.fetch()
+	p.runner.fetch(newContext())
 
 	req := <-fetchChan
 	req.responseChan <- fetchResponse{
@@ -432,7 +453,7 @@ func TestPublisherRunner_Run__Publish_Error(t *testing.T) {
 	p.initWithLastSequence(50)
 	ctx := newContext()
 
-	p.runner.fetch()
+	p.runner.fetch(newContext())
 
 	req := <-fetchChan
 	req.responseChan <- fetchResponse{
@@ -478,7 +499,7 @@ func TestPublisherRunner_Run__Save_Last_Seq_Error(t *testing.T) {
 
 	ctx := newContext()
 
-	p.runner.fetch()
+	p.runner.fetch(newContext())
 	req := <-fetchChan
 	req.responseChan <- fetchResponse{
 		existed: true,
@@ -518,7 +539,7 @@ func TestPublisherRunner_Run__Context_Cancelled(t *testing.T) {
 		})
 	p.initWithLastSequence(50)
 
-	p.runner.fetch()
+	p.runner.fetch(newContext())
 
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
@@ -545,7 +566,7 @@ func TestPublisherRunner_Run__Response_To_Wait__After_Recv_Resp_From_Processor(t
 	p.stubPublishing()
 	ctx := newContext()
 
-	p.runner.fetch()
+	p.runner.fetch(newContext())
 
 	waitRespChan := make(chan uint64, 1)
 	waitReqChan <- waitRequest{
@@ -593,7 +614,7 @@ func TestPublisherRunner_Run__Response_To_Wait__Right_After_Wait_Request(t *test
 	p.stubPublishing()
 	ctx := newContext()
 
-	p.runner.fetch()
+	p.runner.fetch(newContext())
 
 	req := <-fetchChan
 	req.responseChan <- fetchResponse{

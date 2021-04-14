@@ -144,14 +144,20 @@ func (r *publisherRunner) isFetching() bool {
 	return r.fetching
 }
 
-func (r *publisherRunner) fetch() {
-	r.fetchChan <- fetchRequest{
+func (r *publisherRunner) fetch(ctx context.Context) {
+	req := fetchRequest{
 		from:         r.lastSequence + 1,
 		limit:        r.opts.publishLimit,
 		result:       r.events,
 		responseChan: r.respChan,
 	}
-	r.fetching = true
+	select {
+	case r.fetchChan <- req:
+		r.fetching = true
+		return
+	case <-ctx.Done():
+		return
+	}
 }
 
 func (r *publisherRunner) handleFetchResponse(ctx context.Context, resp fetchResponse) error {

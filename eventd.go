@@ -154,7 +154,7 @@ OuterLoop:
 
 				for {
 					if !publisher.isFetching() {
-						publisher.fetch()
+						publisher.fetch(runningCtx)
 					}
 
 					err := publisher.run(runningCtx)

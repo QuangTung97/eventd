@@ -45,12 +45,19 @@ func newObserver(
 	}
 }
 
-func (o *Observer) beforeGetEvents() {
-	o.fetchChan <- fetchRequest{
+func (o *Observer) beforeGetEvents(ctx context.Context) {
+	req := fetchRequest{
 		from:         o.fromSequence,
 		limit:        o.limit,
 		result:       o.cacheResult,
 		responseChan: o.responseChan,
+	}
+
+	select {
+	case o.fetchChan <- req:
+		return
+	case <-ctx.Done():
+		return
 	}
 }
 
@@ -77,7 +84,7 @@ func (o *Observer) waitForEvents(ctx context.Context, result []Event) ([]Event, 
 // GetNextEvents ...
 func (o *Observer) GetNextEvents(ctx context.Context, result []Event) []Event {
 	for {
-		o.beforeGetEvents()
+		o.beforeGetEvents(ctx)
 
 		var err error
 		result, err = o.waitForEvents(ctx, result)

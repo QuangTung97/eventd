@@ -13,7 +13,7 @@ func TestObserver_BeforeGetEvents(t *testing.T) {
 	fetchCh := make(chan fetchRequest, 1)
 	o := newObserver(nil, fetchCh, 40, 5)
 
-	o.beforeGetEvents()
+	o.beforeGetEvents(newContext())
 	assert.Equal(t, 1, len(fetchCh))
 	req := <-fetchCh
 	assert.Equal(t, uint64(40), req.from)
@@ -23,6 +23,21 @@ func TestObserver_BeforeGetEvents(t *testing.T) {
 	assert.Equal(t, 1, cap(req.responseChan))
 }
 
+func TestObserver_BeforeGetEvents__Context_Cancelled(t *testing.T) {
+	t.Parallel()
+
+	fetchCh := make(chan fetchRequest)
+	o := newObserver(nil, fetchCh, 40, 5)
+
+	ctx := context.Background()
+	ctx, cancel := context.WithCancel(ctx)
+	cancel()
+
+	o.beforeGetEvents(ctx)
+
+	assert.Equal(t, 0, len(fetchCh))
+}
+
 func TestObserver_WaitForEvents_Existed(t *testing.T) {
 	t.Parallel()
 
@@ -30,7 +45,7 @@ func TestObserver_WaitForEvents_Existed(t *testing.T) {
 	repo := &RepositoryMock{}
 	o := newObserver(repo, fetchCh, 40, 5)
 
-	o.beforeGetEvents()
+	o.beforeGetEvents(newContext())
 	req := <-fetchCh
 
 	req.result = append(req.result, Event{ID: 101, Sequence: 40})
@@ -66,7 +81,7 @@ func TestObserver_WaitForEvents__Context_Cancelled(t *testing.T) {
 	repo := &RepositoryMock{}
 	o := newObserver(repo, fetchCh, 40, 5)
 
-	o.beforeGetEvents()
+	o.beforeGetEvents(newContext())
 
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
@@ -93,7 +108,7 @@ func TestObserver_WaitForEvents_Not_Existed__GetEventsFrom_Error(t *testing.T) {
 
 	o := newObserver(repo, fetchCh, 40, 5, WithObserverLogger(logger))
 
-	o.beforeGetEvents()
+	o.beforeGetEvents(newContext())
 	req := <-fetchCh
 
 	req.responseChan <- fetchResponse{
@@ -126,7 +141,7 @@ func TestObserver_WaitForEvents_Not_Existed__GetEventsFrom_OK(t *testing.T) {
 	repo := &RepositoryMock{}
 	o := newObserver(repo, fetchCh, 40, 5)
 
-	o.beforeGetEvents()
+	o.beforeGetEvents(newContext())
 	req := <-fetchCh
 
 	req.responseChan <- fetchResponse{
@@ -168,7 +183,7 @@ func TestObserver_BeforeGetEvents__Second_Times__OK(t *testing.T) {
 	repo := &RepositoryMock{}
 	o := newObserver(repo, fetchCh, 40, 5)
 
-	o.beforeGetEvents()
+	o.beforeGetEvents(newContext())
 	req := <-fetchCh
 
 	req.responseChan <- fetchResponse{
@@ -185,7 +200,7 @@ func TestObserver_BeforeGetEvents__Second_Times__OK(t *testing.T) {
 	var events []Event
 	_, _ = o.waitForEvents(ctx, events)
 
-	o.beforeGetEvents()
+	o.beforeGetEvents(newContext())
 	req = <-fetchCh
 	assert.Equal(t, uint64(43), req.from)
 	assert.Equal(t, uint64(5), req.limit)

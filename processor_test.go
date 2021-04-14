@@ -320,7 +320,7 @@ func TestProcessor_Signal__4_Unprocessed__Update_OK(t *testing.T) {
 	assert.Equal(t, uint64(4), p.proc.getLastSequence())
 }
 
-func TestProcessor_Signal__With_Stored__OK(t *testing.T) {
+func TestProcessor_Signal__With_Stored_Reach_Limit_5__OK(t *testing.T) {
 	t.Parallel()
 
 	ctx := newContext()
