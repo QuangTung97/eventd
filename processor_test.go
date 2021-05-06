@@ -12,7 +12,9 @@ type processorTest struct {
 	repo *RepositoryMock
 }
 
-func newProcessorTest(opts runnerOpts) *processorTest {
+func newProcessorTest(options ...Option) *processorTest {
+	opts := computeRunnerOpts(options...)
+
 	repo := &RepositoryMock{}
 	proc := newProcessor(repo, opts)
 
@@ -29,8 +31,8 @@ func (p *processorTest) initWithEvents(events []Event) {
 	_ = p.proc.init(context.Background())
 }
 
-func newProcessorTestWithEvents(opts runnerOpts, events []Event) *processorTest {
-	p := newProcessorTest(opts)
+func newProcessorTestWithEvents(events []Event, options ...Option) *processorTest {
+	p := newProcessorTest(options...)
 	p.initWithEvents(events)
 	return p
 }
@@ -39,7 +41,7 @@ func TestProcessor_Init__GetLastEvents_Error(t *testing.T) {
 	t.Parallel()
 
 	ctx := newContext()
-	p := newProcessorTest(defaultRunnerOpts())
+	p := newProcessorTest()
 
 	p.repo.GetLastEventsFunc = func(ctx context.Context, limit uint64) ([]Event, error) {
 		return nil, errors.New("get-last-events-error")
@@ -59,7 +61,7 @@ func TestProcessor_Init__Without_Last_Events(t *testing.T) {
 
 	ctx := newContext()
 
-	p := newProcessorTest(defaultRunnerOpts())
+	p := newProcessorTest()
 
 	p.repo.GetLastEventsFunc = func(ctx context.Context, limit uint64) ([]Event, error) {
 		return nil, nil
@@ -78,7 +80,7 @@ func TestProcessor_Init__Second_Times_Without_Events(t *testing.T) {
 
 	ctx := newContext()
 
-	p := newProcessorTest(defaultRunnerOpts())
+	p := newProcessorTest()
 
 	p.repo.GetLastEventsFunc = func(ctx context.Context, limit uint64) ([]Event, error) {
 		return []Event{
@@ -179,10 +181,10 @@ func TestProcessor_Signal__GetUnprocessed_Error(t *testing.T) {
 
 	ctx := newContext()
 
-	p := newProcessorTestWithEvents(runnerOpts{
-		getEventsLimit:  4,
-		storedEventSize: 3,
-	}, nil)
+	p := newProcessorTestWithEvents(nil,
+		WithGetEventsLimit(4),
+		WithStoredEventsSize(3),
+	)
 
 	p.repo.GetUnprocessedEventsFunc = func(ctx context.Context, limit uint64) ([]Event, error) {
 		return nil, errors.New("get-unprocessed-error")
@@ -202,10 +204,10 @@ func TestProcessor_Signal__Empty_Unprocessed__Without_Stored(t *testing.T) {
 	t.Parallel()
 
 	ctx := newContext()
-	p := newProcessorTestWithEvents(runnerOpts{
-		getEventsLimit:  4,
-		storedEventSize: 3,
-	}, nil)
+	p := newProcessorTestWithEvents(nil,
+		WithGetEventsLimit(4),
+		WithStoredEventsSize(3),
+	)
 
 	p.repo.GetUnprocessedEventsFunc = func(ctx context.Context, limit uint64) ([]Event, error) {
 		return nil, nil
@@ -225,10 +227,10 @@ func TestProcessor_Signal__Empty_Unprocessed__With_Stored(t *testing.T) {
 		{ID: 9, Sequence: 6},
 		{ID: 11, Sequence: 7},
 	}
-	p := newProcessorTestWithEvents(runnerOpts{
-		getEventsLimit:  4,
-		storedEventSize: 3,
-	}, events)
+	p := newProcessorTestWithEvents(events,
+		WithGetEventsLimit(4),
+		WithStoredEventsSize(3),
+	)
 
 	p.repo.GetUnprocessedEventsFunc = func(ctx context.Context, limit uint64) ([]Event, error) {
 		return nil, nil
@@ -243,10 +245,10 @@ func TestProcessor_Signal__4_Unprocessed__Update_Error(t *testing.T) {
 	t.Parallel()
 
 	ctx := newContext()
-	p := newProcessorTestWithEvents(runnerOpts{
-		getEventsLimit:  4,
-		storedEventSize: 3,
-	}, nil)
+	p := newProcessorTestWithEvents(nil,
+		WithGetEventsLimit(4),
+		WithStoredEventsSize(3),
+	)
 
 	p.repo.GetUnprocessedEventsFunc = func(ctx context.Context, limit uint64) ([]Event, error) {
 		return []Event{
@@ -281,10 +283,10 @@ func TestProcessor_Signal__4_Unprocessed__Update_OK(t *testing.T) {
 	t.Parallel()
 
 	ctx := newContext()
-	p := newProcessorTestWithEvents(runnerOpts{
-		getEventsLimit:  4,
-		storedEventSize: 3,
-	}, nil)
+	p := newProcessorTestWithEvents(nil,
+		WithGetEventsLimit(4),
+		WithStoredEventsSize(3),
+	)
 
 	p.repo.GetUnprocessedEventsFunc = func(ctx context.Context, limit uint64) ([]Event, error) {
 		return []Event{
@@ -329,11 +331,10 @@ func TestProcessor_Signal__With_Stored_Reach_Limit_5__OK(t *testing.T) {
 		{ID: 6, Sequence: 6},
 		{ID: 5, Sequence: 7},
 	}
-
-	p := newProcessorTestWithEvents(runnerOpts{
-		getEventsLimit:  4,
-		storedEventSize: 5,
-	}, events)
+	p := newProcessorTestWithEvents(events,
+		WithGetEventsLimit(4),
+		WithStoredEventsSize(5),
+	)
 
 	p.repo.GetUnprocessedEventsFunc = func(ctx context.Context, limit uint64) ([]Event, error) {
 		return []Event{
@@ -379,10 +380,10 @@ func TestProcessor_Check_From_Sequence(t *testing.T) {
 		{ID: 6, Sequence: 6},
 		{ID: 5, Sequence: 7},
 	}
-	p := newProcessorTestWithEvents(runnerOpts{
-		getEventsLimit:  4,
-		storedEventSize: 5,
-	}, events)
+	p := newProcessorTestWithEvents(events,
+		WithGetEventsLimit(4),
+		WithStoredEventsSize(5),
+	)
 
 	table := []struct {
 		name   string
@@ -431,10 +432,10 @@ func TestProcessor_Get_Events_From(t *testing.T) {
 		{ID: 6, Sequence: 6},
 		{ID: 5, Sequence: 7},
 	}
-	p := newProcessorTestWithEvents(runnerOpts{
-		getEventsLimit:  4,
-		storedEventSize: 5,
-	}, events)
+	p := newProcessorTestWithEvents(events,
+		WithGetEventsLimit(4),
+		WithStoredEventsSize(5),
+	)
 
 	assert.Equal(t, uint64(7), p.proc.getLastSequence())
 
@@ -461,10 +462,10 @@ func TestProcessor_Get_Events_From(t *testing.T) {
 func TestProcessor_Run_Context_Cancelled(t *testing.T) {
 	t.Parallel()
 
-	p := newProcessorTestWithEvents(runnerOpts{
-		getEventsLimit:  4,
-		storedEventSize: 5,
-	}, nil)
+	p := newProcessorTestWithEvents(nil,
+		WithGetEventsLimit(4),
+		WithStoredEventsSize(5),
+	)
 
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
@@ -483,10 +484,10 @@ func TestProcessor_Run_Signal(t *testing.T) {
 		{ID: 6, Sequence: 6},
 		{ID: 5, Sequence: 7},
 	}
-	p := newProcessorTestWithEvents(runnerOpts{
-		getEventsLimit:  4,
-		storedEventSize: 5,
-	}, events)
+	p := newProcessorTestWithEvents(events,
+		WithGetEventsLimit(4),
+		WithStoredEventsSize(5),
+	)
 
 	p.repo.GetUnprocessedEventsFunc = func(ctx context.Context, limit uint64) ([]Event, error) {
 		return []Event{
@@ -530,10 +531,10 @@ func TestProcessor_Run_Multiple_Signals(t *testing.T) {
 		{ID: 6, Sequence: 6},
 		{ID: 5, Sequence: 7},
 	}
-	p := newProcessorTestWithEvents(runnerOpts{
-		getEventsLimit:  4,
-		storedEventSize: 5,
-	}, events)
+	p := newProcessorTestWithEvents(events,
+		WithGetEventsLimit(4),
+		WithStoredEventsSize(5),
+	)
 
 	p.repo.GetUnprocessedEventsFunc = func(ctx context.Context, limit uint64) ([]Event, error) {
 		return []Event{
@@ -579,10 +580,10 @@ func TestProcessor_Run_Fetch__Not_Existed(t *testing.T) {
 		{ID: 6, Sequence: 6},
 		{ID: 5, Sequence: 7},
 	}
-	p := newProcessorTestWithEvents(runnerOpts{
-		getEventsLimit:  4,
-		storedEventSize: 5,
-	}, events)
+	p := newProcessorTestWithEvents(events,
+		WithGetEventsLimit(4),
+		WithStoredEventsSize(5),
+	)
 
 	respChan := make(chan fetchResponse, 1)
 
@@ -613,10 +614,10 @@ func TestProcessor_Run_Fetch__Existed(t *testing.T) {
 		{ID: 6, Sequence: 6},
 		{ID: 5, Sequence: 7},
 	}
-	p := newProcessorTestWithEvents(runnerOpts{
-		getEventsLimit:  4,
-		storedEventSize: 5,
-	}, events)
+	p := newProcessorTestWithEvents(events,
+		WithGetEventsLimit(4),
+		WithStoredEventsSize(5),
+	)
 
 	respChan := make(chan fetchResponse, 1)
 
@@ -651,10 +652,10 @@ func TestProcessor_Run_Fetch__Wait(t *testing.T) {
 		{ID: 6, Sequence: 6},
 		{ID: 5, Sequence: 7},
 	}
-	p := newProcessorTestWithEvents(runnerOpts{
-		getEventsLimit:  4,
-		storedEventSize: 5,
-	}, events)
+	p := newProcessorTestWithEvents(events,
+		WithGetEventsLimit(4),
+		WithStoredEventsSize(5),
+	)
 
 	respChan := make(chan fetchResponse, 3)
 
@@ -738,10 +739,10 @@ func TestProcessor_Run_Fetch__Wait_And_Wait(t *testing.T) {
 		{ID: 6, Sequence: 6},
 		{ID: 5, Sequence: 7},
 	}
-	p := newProcessorTestWithEvents(runnerOpts{
-		getEventsLimit:  4,
-		storedEventSize: 5,
-	}, events)
+	p := newProcessorTestWithEvents(events,
+		WithGetEventsLimit(4),
+		WithStoredEventsSize(5),
+	)
 
 	respChan := make(chan fetchResponse, 3)
 	fetchChan := make(chan fetchRequest, 3)
