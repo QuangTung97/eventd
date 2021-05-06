@@ -223,7 +223,7 @@ func TestRunner_Processor_Run_Error(t *testing.T) {
 		r.Run(ctx)
 	}()
 
-	time.Sleep(40 * time.Millisecond)
+	time.Sleep(30 * time.Millisecond)
 	cancel()
 	wg.Wait()
 
